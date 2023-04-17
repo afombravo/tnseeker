@@ -2,7 +2,7 @@
 Tnseeker is a pipeline for transposon insertion sequencing (Tn-Seq) analysis. It performs various operations such as read trimming, alignment , and essential gene inference.
 
 ## Installation
-Tnseeker currently exist as an unpublished PyPI module. You can download the installation wheel from the current repository ('tnseeker-1.0.0.tar.gz') and install it in a Linux environment by typing: 
+Tnseeker currently exist as a yet unpublished PyPI module. You can, however, download the installation wheel from the current repository ('tnseeker-1.0.0.tar.gz') and install it in a Linux environment by typing: 
 
 `pip install "/your/tnseeker/directory/tnseeker-1.0.0.tar.gz" `
  
