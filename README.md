@@ -69,4 +69,5 @@ An example use case is the folowing. See below the meaning of the input argument
                
 ## Dependencies
 
-tnseeker requires several dependences, all instalable via `pip` commands, except the notable exception of the poibin module, which is available in the current tnseeker folder, and can be originally be found here: https://github.com/tsakim/poibin
+tnseeker requires several dependencies, all instalable via `pip` commands.
+A notable exception is the poibin module, which is available in the current tnseeker folder, and can be originally be found here: https://github.com/tsakim/poibin
