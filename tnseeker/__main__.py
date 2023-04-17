@@ -183,8 +183,8 @@ def input_parser(variables):
     parser.add_argument("--mq",nargs='?',const=0,help="Bowtie2 MAPQ threshold")
     
     parser.add_argument("--pv",nargs='?',const=None,help="Essential Finder pvalue threshold for essentiality determination")
-    parser.add_argument("--sl5",nargs='?',const=None,help="5' gene trimming % for essentiality determination (number between 0 and 1)")
-    parser.add_argument("--sl3",nargs='?',const=None,help="3' gene trimming % for essentiality determination (number between 0 and 1)")
+    parser.add_argument("--sl5",nargs='?',const=None,help="5' gene trimming percentage for essentiality determination (number between 0 and 1)")
+    parser.add_argument("--sl3",nargs='?',const=None,help="3' gene trimming percentage for essentiality determination (number between 0 and 1)")
     
     args = parser.parse_args()
 
