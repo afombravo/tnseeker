@@ -1,5 +1,5 @@
 # tnseeker
-Tnseeker is a pipeline for transposon insertion sequencing (Tn-Seq) analysis. It performs various operations such as read trimming, alignment , and essential gene inference.
+Tnseeker is a pipeline for transposon insertion sequencing (Tn-Seq) analysis. It performs various operations such as read trimming, alignment, and essential gene inference.
 
 ## Installation
 Tnseeker currently exist as a yet unpublished PyPI module. You can, however, download the installation wheel from the current repository ('tnseeker-1.0.0.tar.gz') and install it in a Linux environment by typing: 
@@ -71,3 +71,30 @@ An example use case is the folowing. See below the meaning of the input argument
 
 tnseeker requires several dependencies, all instalable via `pip` commands.
 A notable exception is the poibin module, which is available in the current tnseeker folder, and can be originally be found here: https://github.com/tsakim/poibin
+
+## Requirements for working function
+
+tnseeker is an actively under-developement multi-step-sequencing analysis and processing program. Bugs, particularly at loading data from gff formats, can be expected. Troubleshooting on this end can be made easier by looking at the gene_info_parser_gff() function in the 'Essential_finder.py' script.
+
+### File requirements
+
+tnseeker requires several input files:
+
+ 1. A '.fastq.gz' file
+ 
+ 2. An annotation file, either genbank (.gb) or .gff.
+ 
+ 3. A FASTA file with the genome under analysis.
+
+1. exists as a single file;
+2. and 3. need to be in the same folder;
+
+### Working modes
+
+tnseeker is composed of 2 submodules: 
+
+1. the initial sequencing processing: Handles the read trimming and alignment, creating a compiled .csv with all found transposon insertions.
+
+2. The Essential_finder: Infers gene essentiality from the insertion information found in the previous .csv file. tnseeker can thus be run on a standalone mode if the appropriate .csv and annotation files are indicated. 
+
+PUT HERE EXAMPLE OF CODE FOR THIS
