@@ -7,7 +7,7 @@ Tnseeker currently exist as an unpublished PyPI module. You can download the ins
 `pip install "/your/tnseeker/directory/tnseeker-1.0.0.tar.gz" `
  
 ## Requirements
-The tnseeker pipeline requires Bowtie2 to be callable from the terminal.
+The tnseeker pipeline requires both Python3 and Bowtie2 to be callable from the terminal. 
 
 ## Executing 
 tnseeker is executable from the command line by typing:
@@ -66,3 +66,7 @@ An example use case is the folowing. See below the meaning of the input argument
                
   --sl3 [SL3]  3' gene trimming percent for essentiality determination (number
                between 0 and 1)
+               
+## Dependencies
+
+tnseeker requires several dependences, all instalable via `pip` commands, except the notable exception of the poibin module, which is available in the current tnseeker folder, and can be originally be found here: https://github.com/tsakim/poibin
