@@ -97,4 +97,10 @@ tnseeker is composed of 2 submodules:
 
 2. The Essential_finder: Infers gene essentiality from the insertion information found in the previous .csv file. tnseeker can thus be run on a standalone mode if the appropriate .csv and annotation files are indicated. 
 
-PUT HERE EXAMPLE OF CODE FOR THIS
+If you already have an appropriatly format transposon insertion .csv file, and just want to infer gene essentiality. Its possible to execute the standalone Essential_Finder.py script as follows (OS inclusive):
+
+`python "/your/script/directory/Essential_Finder.py" '/your/data/directory/with/fastqfiles' strain_name annotation_type(gb/gff) '/your/annotations/directory/'`
+
+
+
+
