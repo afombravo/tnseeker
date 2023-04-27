@@ -122,7 +122,8 @@ def bowtie_aligner_maker_paired(variables):
 
 def tn_trimmer_single(variables):
     reads_trimer.main([f"{variables['sequencing_files'][0]}",f"{variables['directory']}",f"{variables['sequence']}",\
-                       f"{variables['seq_type']}",f"{variables['barcode']}",f"{variables['phred']}"])
+                       f"{variables['seq_type']}",f"{variables['barcode']}",f"{variables['phred']}",\
+                       f"{variables['barcode_up']}",f"{variables['barcode_down']}",f"{variables['mismatches']}"])
 
     variables["fastq_trimed"] = f'{variables["directory"]}/processed_reads_1.fastq'
 
@@ -135,7 +136,9 @@ def tn_trimmer_paired(variables):
         raise IndexError("Make sure you selected the correct sequencing type, or that the .gz files are labelled accordingly")
 
     reads_trimer.main([f"{variables['sequencing_files'][0]}",f"{variables['directory']}",f"{variables['sequence']}",\
-                       f"{variables['seq_type']}",f"{variables['barcode']}",f"{variables['phred']}",f"{variables['sequencing_files_r'][0]}"])
+                       f"{variables['seq_type']}",f"{variables['barcode']}",f"{variables['phred']}",\
+                       f"{variables['sequencing_files_r'][0]}",f"{variables['barcode_up']}",f"{variables['barcode_down']}",\
+                       f"{variables['mismatches']}"])
 
     variables["fastq_trimed"] = [f'{variables["directory"]}/processed_reads_1.fastq']+\
                                 [f'{variables["directory"]}/processed_reads_2.fastq']
@@ -167,24 +170,27 @@ def input_parser(variables):
     
     parser = argparse.ArgumentParser()
     parser.add_argument("-s",help="Strain name. Must match the annotation (FASTA/GFF/GB) file names")
-    parser.add_argument("-sd",help="The full path to the sequencing file")
-    parser.add_argument("--sd_2",help="The full path to the pair ended sequencing file")
+    parser.add_argument("-sd",help="The full path to the sequencing files FOLDER")
+    parser.add_argument("--sd_2",help="The full path to the pair ended sequencing files FOLDER (needs to be different from the first folder)")
     parser.add_argument("-ad",help="The full path to the directory with the annotation (FASTA/GFF/GB) files")
     parser.add_argument("-at",help="Annotation Type (Genbank/gff)")
     parser.add_argument("-st",help="Sequencing type (Paired-ended (PE)/Single-ended(SE)")
     parser.add_argument("--tn",nargs='?',const=None,help="Transposon border sequence (Himar: 'ACTTATCAGCCAACCTGT'; tn5: 'GATGTGTATAAGAGACAG'). Required for triming and proper mapping")
+    parser.add_argument("--m",nargs='?',const=None,help="Mismatches in the transposon border sequence (default is 0)")
     parser.add_argument("--k",nargs='?',const=False,help="Remove intermediate files. Default is yes, remove.")
     parser.add_argument("--e",nargs='?',const=False,help="Run only the essential determing script. required the all_insertions_STRAIN.csv file to have been generated first.")
     parser.add_argument("--t",nargs='?',const=False,help="Run without searching for a transposon sequence, and triming the .fastq file")
     parser.add_argument("--b",nargs='?',const=False,help="Run with barcode extraction")
+    parser.add_argument("--b1",nargs='?',const=False,help="upstream barcode sequence (example: ATC)")
+    parser.add_argument("--b2",nargs='?',const=False,help="downstream barcode sequence (example: CTA)")
     parser.add_argument("--rt",nargs='?',const=False,help="Read threshold number")
     parser.add_argument("--ne",nargs='?',const=False,help="Run without essential Finding")
     parser.add_argument("--ph",nargs='?',const=1,help="Phred Score (removes reads where nucleotides have lower phred scores)")
     parser.add_argument("--mq",nargs='?',const=0,help="Bowtie2 MAPQ threshold")
     
     parser.add_argument("--pv",nargs='?',const=None,help="Essential Finder pvalue threshold for essentiality determination")
-    parser.add_argument("--sl5",nargs='?',const=None,help="5' gene trimming percentage for essentiality determination (number between 0 and 1)")
-    parser.add_argument("--sl3",nargs='?',const=None,help="3' gene trimming percentage for essentiality determination (number between 0 and 1)")
+    parser.add_argument("--sl5",nargs='?',const=None,help="5' gene trimming percent for essentiality determination (number between 0 and 1)")
+    parser.add_argument("--sl3",nargs='?',const=None,help="3' gene trimming percent for essentiality determination (number between 0 and 1)")
     
     args = parser.parse_args()
 
@@ -198,8 +204,11 @@ def input_parser(variables):
         print("Running in essentials finder only mode\n")
         
     variables["trim"]=False
+    variables["mismatches"] = 0 
     if args.tn is not None:
         variables["trim"] = True
+        if args.m is not None:
+            variables["mismatches"] = int(args.m)
         print("Running with transposon triming\n")
 
     variables["remove"]=True
@@ -211,6 +220,10 @@ def input_parser(variables):
     if args.b is not None:
         variables["barcode"] = True
         print("Running with barcode finding\n")
+    
+    if variables["barcode"]:
+        variables["barcode_up"] = args.b1
+        variables["barcode_down"] = args.b2
 
     variables["read_threshold"]=False
     variables["read_value"] = 0

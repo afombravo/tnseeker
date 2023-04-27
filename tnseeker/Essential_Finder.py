@@ -953,8 +953,8 @@ def multi_pvalue_iter(basket):
         
     result = sorted(result, key=lambda e: e[0][0], reverse=True)
     pvalue_listing, euclidean_points = zip(*result)
-    
-    return list(pvalue_listing), list(euclidean_points)
+
+    return pvalue_listing, [n for n in zip(*euclidean_points)]
 
 def final_compiler(optimal_basket,pvalue,euclidean_points):
     
@@ -1130,19 +1130,19 @@ def domain_iterator(basket):
     
         basket=orientation_pvaluing(basket)
         pvalue_listing, euclidean_points=multi_pvalue_iter(basket)
-    
-        convergence = [[0] + [1]] * len(euclidean_points) #point where TPR_sensitivity = 1 and 1-specificity = 0
+        
+        convergence = [[0] + [1]] * len(np.array(euclidean_points[0])) #point where TPR_sensitivity = 1 and 1-specificity = 0
     
         #lower is better
-        distances = scipy.spatial.distance.cdist(np.array(euclidean_points),np.array(convergence),'euclidean')
+        distances = scipy.spatial.distance.cdist(np.array(euclidean_points[0]),np.array(convergence),'euclidean')
         
         optimal_distance = []
         list(filter(lambda x: optimal_distance.append(x[0]), distances)) #returns first entry of the array of ecludian
         inflexion_points_index = (optimal_distance.index(min(optimal_distance))) #gives the index of the inflexion point. that minimizes the eucledian distances
     
-        pvalue = pvalue_listing[inflexion_points_index]
+        pvalue = pvalue_listing[inflexion_points_index][0]
         best_distance = optimal_distance[inflexion_points_index]
-    
+
         return pvalue, best_distance, np.array(euclidean_points)
     
     def iterating(i,iterator_store,euclidean_distances,basket):

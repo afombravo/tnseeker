@@ -4,6 +4,7 @@ import sys
 from numba import njit
 import numpy as np
 import gzip
+import glob
 
 """ This script is for processing and trimming high-throughput sequencing data. 
     It takes as input a fastq file, a folder path to store the output, the 
@@ -87,7 +88,7 @@ def barcodeID(sequence,sequence_bin,borders):
     if (border_up is not None) & (border_down is not None):
         return sequence[border_up+len(borders[0]):border_down]
 
-def read_trimer(reading,sequences,quality_set,borders="",barcode_allow=False):
+def read_trimer(reading,sequences,quality_set,mismatches,borders="",barcode_allow=False):
     processed_read = []
     barcode_pool = []
     for read in reading:
@@ -95,7 +96,7 @@ def read_trimer(reading,sequences,quality_set,borders="",barcode_allow=False):
         sequence_bin = seq2bin(sequence)
         quality = str(read[3],"utf-8")
 
-        border_find = imperfect_find(sequence_bin,sequences,2) #2 mismatches in Tn search sequence
+        border_find = imperfect_find(sequence_bin,sequences,mismatches) 
         if border_find is not None:
             read[1] = sequence[border_find+len(sequences):]
             read[3] = quality[border_find+len(sequences):]
@@ -117,9 +118,10 @@ def cpu():
     pool = multiprocessing.Pool(processes = c)
     return pool, c
       
-def extractor(fastq,folder_path,sequences,barcode,phred = 1):
+def extractor(fastq,folder_path,sequences,barcode,barcode_upstream,barcode_downstream,mismatches,phred = 1):
     transposon_seq = seq2bin(sequences)
-    borders = [seq2bin("CGAGGTCTCT"),seq2bin("CGTACGCT")]
+    if barcode:
+        borders = [seq2bin(barcode_upstream),seq2bin(barcode_downstream)]
     reading = []
     read_bucket=[]
     pool, cpus = cpu()
@@ -130,45 +132,47 @@ def extractor(fastq,folder_path,sequences,barcode,phred = 1):
     if phred < 1:
         phred = 1
     quality_set = set(quality_list[:phred-1])
-    with gzip.open(fastq, "rb") as current:
-        for line in current:
-            reading.append(line[:-1])
-            
-            if len(reading) == 4: #a read always has 4 lines
-                read_bucket.append(reading)
-                reading=[]
-                count_total+=1
+
+    for file in fastq:
+        with gzip.open(file, "rb") as current:
+            for line in current:
+                reading.append(line[:-1])
                 
-            if len(read_bucket)>=cpus*divider:
-                result_objs,subdivied = [],[]
-                pool, cpus = cpu()
-                z, spliter_mid=0,divider
-                for i in range(cpus):
-                    subdivied.append(read_bucket[z:spliter_mid])
-                    z += divider
-                    spliter_mid += divider
+                if len(reading) == 4: 
+                    read_bucket.append(reading)
+                    reading=[]
+                    count_total+=1
                     
-                for read in subdivied:
-                    if not barcode:
-                        result=pool.apply_async(read_trimer, args=((read,transposon_seq,quality_set)))
-                    else:
-                        result=pool.apply_async(read_trimer, args=((read,transposon_seq,quality_set,borders,True)))
-                    result_objs.append(result)
-                pool.close()
-                pool.join()
-                    
-                result = [result.get() for result in result_objs]
-                if not barcode:
-                    for trimmed,barcodes in result:
-                        count_trimed+=len(trimmed)
-                        write(trimmed, "/processed_reads_1.fastq", folder_path)
+                if len(read_bucket)>=cpus*divider:
+                    result_objs,subdivied = [],[]
+                    pool, cpus = cpu()
+                    z, spliter_mid=0,divider
+                    for i in range(cpus):
+                        subdivied.append(read_bucket[z:spliter_mid])
+                        z += divider
+                        spliter_mid += divider
                         
-                else:
-                    for trimmed,barcodes in result:
-                        count_trimed+=len(trimmed)
-                        write(trimmed, "/processed_reads_1.fastq", folder_path)
-                        write(barcodes, "/barcodes_1.txt", folder_path)
-                read_bucket = []
+                    for read in subdivied:
+                        if not barcode:
+                            result=pool.apply_async(read_trimer, args=((read,transposon_seq,quality_set,mismatches)))
+                        else:
+                            result=pool.apply_async(read_trimer, args=((read,transposon_seq,quality_set,mismatches,borders,True)))
+                        result_objs.append(result)
+                    pool.close()
+                    pool.join()
+                        
+                    result = [result.get() for result in result_objs]
+                    if not barcode:
+                        for trimmed,barcodes in result:
+                            count_trimed+=len(trimmed)
+                            write(trimmed, "/processed_reads_1.fastq", folder_path)
+                            
+                    else:
+                        for trimmed,barcodes in result:
+                            count_trimed+=len(trimmed)
+                            write(trimmed, "/processed_reads_1.fastq", folder_path)
+                            write(barcodes, "/barcodes_1.txt", folder_path)
+                    read_bucket = []
                 
     if not barcode:
         trimmed,barcodes=read_trimer(read_bucket,transposon_seq,quality_set)
@@ -199,54 +203,68 @@ def paired_ended_rearrange(fastq2,folder_path):
                     duplicated.add(title)
     
     reading,read_bucket=[],[]
-    with gzip.open(fastq2, "rb") as current:
-        for line in current:
-            reading.append(line[:-1])
-            if len(reading) == 4: #a read always has 4 lines
-                reading[0]=str(reading[0],"utf-8")
-                title = reading[0].split(" ")[0]
-                title = title.split(":")
-                title = title[3]+title[4]+title[5]+title[6]
-                if ("@" in reading[0]) & ((title in names) or (title in duplicated)):
-                    if title in duplicated:
-                        duplicated.remove(title)
-                    else:
-                        names.remove(title)
-                    reading[1]=str(reading[1],"utf-8")
-                    reading[2]=str(reading[2],"utf-8")
-                    reading[3]=str(reading[3],"utf-8")
-                    read_bucket.append(reading)
-                    if len(read_bucket)>1000000:
-                        write(read_bucket, "/processed_reads_2.fastq", folder_path,False)
-                        read_bucket=[]
-                reading=[]
+    for file in fastq2:
+        with gzip.open(file, "rb") as current:
+            for line in current:
+                reading.append(line[:-1])
+                if len(reading) == 4: 
+                    reading[0]=str(reading[0],"utf-8")
+                    title = reading[0].split(" ")[0]
+                    title = title.split(":")
+                    title = title[3]+title[4]+title[5]+title[6]
+                    if ("@" in reading[0]) & ((title in names) or (title in duplicated)):
+                        if title in duplicated:
+                            duplicated.remove(title)
+                        else:
+                            names.remove(title)
+                        reading[1]=str(reading[1],"utf-8")
+                        reading[2]=str(reading[2],"utf-8")
+                        reading[3]=str(reading[3],"utf-8")
+                        read_bucket.append(reading)
+                        if len(read_bucket)>1000000:
+                            write(read_bucket, "/processed_reads_2.fastq", folder_path,False)
+                            read_bucket=[]
+                    reading=[]
                         
     write(read_bucket, "/processed_reads_2.fastq", folder_path,False)
-    
+   
+def folder_sequence_parser(folder):
+    pathing = []
+    for exten in ['*.gz']:
+        for filename in glob.glob(os.path.join(folder, exten)):
+            pathing.append(filename) 
+    return pathing
+
 def main(argv):
 
-    fastq1=argv[0] #"C:/Users/afons/Documents/Tn-Seq/HiSeq5_data/NT12004/NT12004_HiSeq5/HFVHGBBXY_Milion_HiSeq_19s005084-1-1_Bravo_lane6sample2_sequence.fastq"
-    folder_path = argv[1] #"C:/Users/afons/Documents/Tn-Seq/Carlos/liquid"
+    fastq1=folder_sequence_parser(argv[0])
+    folder_path = argv[1] 
     sequences = argv[2]
     paired = argv[3]
     phred = int(argv[5])
     
-    barcode = False
+    barcode,barcode_upstream,barcode_downstream = False,None,None
     if argv[4] == "True":
         barcode = True
+        barcode_upstream = argv[-3]
+        barcode_downstream = argv[-2]
+        mismatches = int(argv[-1])
 
     print("Trimming Sequences")
+
     try:
-        extractor(fastq1,folder_path,sequences,barcode,phred)
+        extractor(fastq1,folder_path,sequences,barcode,barcode_upstream,barcode_downstream,mismatches,phred)
     except Exception as e:
         print(e)
     
     if paired == "PE":
-        fastq2=argv[6]
+        fastq2=folder_sequence_parser(argv[6])
         paired_ended_rearrange(fastq2,folder_path)
             
 if __name__ == "__main__":
     if len(sys.argv) > 6:
         argv = sys.argv[1:7] if sys.argv[4] == "PE" else sys.argv[1:6]
+        if argv[4] == "True":
+            argv.append(sys.argv[-3],sys.argv[-2],sys.argv[-1])
     main(argv)
 
