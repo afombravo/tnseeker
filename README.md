@@ -16,7 +16,7 @@ tnseeker is executable from the command line by typing:
 
 An example use case is the folowing. See below the meaning of the input arguments:
 
-`python -m tnseeker -s BW25113 -sd '/your/data/directory/file.fastq.gz' -ad /your/annotations/directory/ -at gb -st SE --tn AGATGTGTATAAGAGACAG --ph 40 --mq 10 --b`
+`python -m tnseeker -s BW25113 -sd '/your/data/directory/folder_with_fastq.gz_files' -ad /your/annotations/directory/ -at gb -st SE --tn AGATGTGTATAAGAGACAG --ph 40 --mq 10 --b`
 
 ## Optional Arguments:
 
