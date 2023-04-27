@@ -1,5 +1,5 @@
 # Tnseeker
-Tnseeker is a pipeline for transposon insertion sequencing (Tn-Seq) analysis. It performs various operations such as read trimming, alignment, and essential gene inference. Tnseeker distinguishes itself by its ability to not demand from the user to input several threshold/cutoff defining parameters, being able to automatically infer and adjust these to better fit the availble data. Tnseeker works with any transposon disruption experiment, as biases are corrected  
+Tnseeker is a comprehensive pipeline designed for transposon insertion sequencing (Tn-Seq) analysis. It can perform multiple tasks, including read trimming, alignment, and essential gene inference. Tnseeker sets itself apart with its ability to automatically infer and adjust threshold/cutoff defining parameters, eliminating the need for advanced user input, thus enabling the pipeline to better fit essentiality from the available data. Tnseeker is compatible with any transposon disruption experiment, as it effectively corrects any transposon specific biases (i.e. different insertion sequences, hotspots).
 
 ## Installation
 Tnseeker currently exist as a yet unpublished PyPI module. You can, however, download the installation wheel from the current repository ('tnseeker-1.0.0.tar.gz') and install it in a Linux environment by typing: 
@@ -25,9 +25,9 @@ An example use case is the folowing. See below the meaning of the input argument
   -s S         Strain name. Must match the annotation (FASTA/GFF/GB) file
                names
                
-  -sd SD       The full path to the sequencing file
+  -sd SD       The full path to the sequencing file(s) folder
   
-  --sd_2 SD_2  The full path to the pair ended sequencing file
+  --sd_2 SD_2  The full path to the pair ended sequencing file (if available)
   
   -ad AD       The full path to the directory with the annotation
                (FASTA/GFF/GB) files
