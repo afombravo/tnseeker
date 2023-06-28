@@ -34,7 +34,7 @@ def inputs(argv):
     variables.pvalue = float(argv[6])
     variables.output_name = variables.strain + "_alldomains"
     variables.true_positives = variables.annotation_folder + "/Truepositivs.csv"
-    variables.true_negatives = variables.annotation_folder + "/Truenegativs_compiled.csv"
+    variables.true_negatives = variables.annotation_folder + "/Truenegativs.csv"
 
 def path_finder():
     

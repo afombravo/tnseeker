@@ -132,53 +132,60 @@ def extractor(fastq,folder_path,sequences,barcode,barcode_upstream,barcode_downs
     if phred < 1:
         phred = 1
     quality_set = set(quality_list[:phred-1])
-
+    
+    file_number = len(fastq)
+    file_counter = 0
     for file in fastq:
-        with gzip.open(file, "rb") as current:
-            for line in current:
-                reading.append(line[:-1])
-                
-                if len(reading) == 4: 
-                    read_bucket.append(reading)
-                    reading=[]
-                    count_total+=1
+        file_counter += 1
+        print(f'Processing {file_counter} out of {file_number}')
+        try:
+            with gzip.open(file, "rb") as current:
+                for line in current:
+                    reading.append(line[:-1])
                     
-                if len(read_bucket)>=cpus*divider:
-                    result_objs,subdivied = [],[]
-                    pool, cpus = cpu()
-                    z, spliter_mid=0,divider
-                    for i in range(cpus):
-                        subdivied.append(read_bucket[z:spliter_mid])
-                        z += divider
-                        spliter_mid += divider
+                    if len(reading) == 4: 
+                        read_bucket.append(reading)
+                        reading=[]
+                        count_total+=1
                         
-                    for read in subdivied:
-                        if not barcode:
-                            result=pool.apply_async(read_trimer, args=((read,transposon_seq,quality_set,mismatches)))
-                        else:
-                            result=pool.apply_async(read_trimer, args=((read,transposon_seq,quality_set,mismatches,borders,True)))
-                        result_objs.append(result)
-                    pool.close()
-                    pool.join()
-                        
-                    result = [result.get() for result in result_objs]
-                    if not barcode:
-                        for trimmed,barcodes in result:
-                            count_trimed+=len(trimmed)
-                            write(trimmed, "/processed_reads_1.fastq", folder_path)
+                    if len(read_bucket)>=cpus*divider:
+                        result_objs,subdivied = [],[]
+                        pool, cpus = cpu()
+                        z, spliter_mid=0,divider
+                        for i in range(cpus):
+                            subdivied.append(read_bucket[z:spliter_mid])
+                            z += divider
+                            spliter_mid += divider
                             
-                    else:
-                        for trimmed,barcodes in result:
-                            count_trimed+=len(trimmed)
-                            write(trimmed, "/processed_reads_1.fastq", folder_path)
-                            write(barcodes, "/barcodes_1.txt", folder_path)
-                    read_bucket = []
-                
+                        for read in subdivied:
+                            if not barcode:
+                                result=pool.apply_async(read_trimer, args=((read,transposon_seq,quality_set,mismatches)))
+                            else:
+                                result=pool.apply_async(read_trimer, args=((read,transposon_seq,quality_set,mismatches,borders,True)))
+                            result_objs.append(result)
+                        pool.close()
+                        pool.join()
+                            
+                        result = [result.get() for result in result_objs]
+                        if not barcode:
+                            for trimmed,barcodes in result:
+                                count_trimed+=len(trimmed)
+                                write(trimmed, "/processed_reads_1.fastq", folder_path)
+                                
+                        else:
+                            for trimmed,barcodes in result:
+                                count_trimed+=len(trimmed)
+                                write(trimmed, "/processed_reads_1.fastq", folder_path)
+                                write(barcodes, "/barcodes_1.txt", folder_path)
+                        read_bucket = []
+        except Exception:
+            print(f'Error parsing {file}')
+            
     if not barcode:
-        trimmed,barcodes=read_trimer(read_bucket,transposon_seq,quality_set)
+        trimmed,barcodes=read_trimer(read_bucket,transposon_seq,quality_set,0)
         write(trimmed, "/processed_reads_1.fastq", folder_path)
     else:
-        trimmed,barcodes=read_trimer(read_bucket,transposon_seq,quality_set,borders)
+        trimmed,barcodes=read_trimer(read_bucket,transposon_seq,quality_set,0,borders=borders)
         write(trimmed, "/processed_reads_1.fastq", folder_path)
         write(barcodes, "/barcodes_1.txt", folder_path)
     count_trimed+=len(trimmed)
@@ -242,13 +249,13 @@ def main(argv):
     sequences = argv[2]
     paired = argv[3]
     phred = int(argv[5])
+    mismatches = int(argv[-1])
     
     barcode,barcode_upstream,barcode_downstream = False,None,None
     if argv[4] == "True":
         barcode = True
         barcode_upstream = argv[-3]
         barcode_downstream = argv[-2]
-        mismatches = int(argv[-1])
 
     print("Trimming Sequences")
 

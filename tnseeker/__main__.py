@@ -53,7 +53,7 @@ def path_finder_seq(variables):
     name=Path(variables["sequencing_files"]).stem
     dirname = os.path.dirname(variables["sequencing_files"])
     variables["sequencing_files"] = [filename] + [name] + [dirname]
-    
+
     if variables["seq_type"] == "PE": 
         filename = variables["sequencing_files_r"]
         name=Path(variables["sequencing_files_r"]).stem
@@ -121,6 +121,7 @@ def bowtie_aligner_maker_paired(variables):
         os.remove(variables['fastq_trimed'][1])
 
 def tn_trimmer_single(variables):
+
     reads_trimer.main([f"{variables['sequencing_files'][0]}",f"{variables['directory']}",f"{variables['sequence']}",\
                        f"{variables['seq_type']}",f"{variables['barcode']}",f"{variables['phred']}",\
                        f"{variables['barcode_up']}",f"{variables['barcode_down']}",f"{variables['mismatches']}"])
@@ -221,6 +222,8 @@ def input_parser(variables):
         variables["barcode"] = True
         print("Running with barcode finding\n")
     
+    variables["barcode_up"] = None
+    variables["barcode_down"] = None
     if variables["barcode"]:
         variables["barcode_up"] = args.b1
         variables["barcode_down"] = args.b2
