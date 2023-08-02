@@ -1,5 +1,7 @@
 # Tnseeker
-Tnseeker is a comprehensive pipeline designed for transposon insertion sequencing (Tn-Seq) analysis. It can perform multiple tasks, including read trimming, alignment, and essential gene inference. Tnseeker sets itself apart with its ability to automatically infer and adjust threshold/cutoff defining parameters, eliminating the need for advanced user input, thus enabling the pipeline to better fit essentiality from the available data. Tnseeker is compatible with any transposon disruption experiment, as it effectively corrects any transposon specific biases (i.e. different insertion sequences, hotspots).
+Tnseeker is a comprehensive pipeline designed for transposon insertion sequencing (Tn-Seq) analysis. It can perform multiple tasks, including read trimming, alignment, and essential gene inference. Tnseeker sets itself apart with its ability to automatically infer and adjust threshold/cutoff defining parameters, eliminating the need for advanced user input, and thus enabling a more accurante inference of essentiality from the available data. Tnseeker is compatible with any transposon disruption experiment, as it effectively corrects any transposon specific biases (i.e. different insertion sequences and hotspots).
+
+Tnseeker is under active developement and is available as is. Contact me if you are interested in using the program and have any questions.
 
 ## Installation
 Tnseeker currently exist as a yet unpublished PyPI module. You can, however, download the installation wheel from the current repository ('tnseeker-1.0.0.tar.gz') and install it in a Linux environment by typing: 
