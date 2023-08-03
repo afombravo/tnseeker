@@ -63,6 +63,7 @@ def path_finder_seq(variables):
     variables["fasta"]=path_finder(variables,'*.fasta')
     
     variables["directory"] = os.path.join(os.getcwd(), variables["sequencing_files"][1])
+
     if not os.path.isdir(variables["directory"]):
         os.mkdir(variables["directory"])
      
@@ -91,16 +92,24 @@ def bowtie_index_maker(variables):
     if not os.path.isdir(variables["index_dir"]): 
         os.mkdir(variables["index_dir"])
         
-    send = ["bowtie2-build",f"{variables['fasta']}",
-            f"{variables['index_dir']}{variables['strain']}",f"2>{variables['directory']}/bowtie_index_log.log"]
+    send = ["bowtie2-build",
+            f"{variables['fasta']}",
+            f"{variables['index_dir']}{variables['strain']}",
+            f"2>{variables['directory']}/bowtie_index_log.log"]
+    
     subprocess_cmd(send)
     return variables
     
 def bowtie_aligner_maker_single(variables):
     cpus = cpu()[1]
-    send = ["bowtie2","--end-to-end","-x",f"{variables['index_dir']}{variables['strain']}",
-            "-U",f"{variables['fastq_trimed']}","-S",f"{variables['directory']}/alignment.sam",
-            "--no-unal",f"--threads {cpus}",f"2>'{variables['directory']}/bowtie_align_log.log'"]#,"--local"]
+    send = ["bowtie2",
+            "--end-to-end",
+            "-x",f"{variables['index_dir']}{variables['strain']}",
+            "-U",f"{variables['fastq_trimed']}",
+            "-S",f"{variables['directory']}/alignment.sam",
+            "--no-unal",
+            f"--threads {cpus}",
+            f"2>'{variables['directory']}/bowtie_align_log.log'"]
     
     subprocess_cmd(send)
 
@@ -109,10 +118,15 @@ def bowtie_aligner_maker_single(variables):
     
 def bowtie_aligner_maker_paired(variables):
     cpus = cpu()[1]
-    send = ["bowtie2","--end-to-end","-x",f"{variables['index_dir']}{variables['strain']}",
-            "-1",f"{variables['fastq_trimed'][0]}","-2",f"{variables['fastq_trimed'][1]}",
+    send = ["bowtie2",
+            "--end-to-end",
+            "-x",f"{variables['index_dir']}{variables['strain']}",
+            "-1",f"{variables['fastq_trimed'][0]}",
+            "-2",f"{variables['fastq_trimed'][1]}",
             "-S",f"{variables['directory']}/alignment.sam",
-            "--no-unal",f"--threads {cpus}",f"2>'{variables['directory']}/bowtie_align_log.log'"]#, "--local"]
+            "--no-unal",
+            f"--threads {cpus}",
+            f"2>'{variables['directory']}/bowtie_align_log.log'"]
     
     subprocess_cmd(send)
 
@@ -122,9 +136,18 @@ def bowtie_aligner_maker_paired(variables):
 
 def tn_trimmer_single(variables):
 
-    reads_trimer.main([f"{variables['sequencing_files'][0]}",f"{variables['directory']}",f"{variables['sequence']}",\
-                       f"{variables['seq_type']}",f"{variables['barcode']}",f"{variables['phred']}",\
-                       f"{variables['barcode_up']}",f"{variables['barcode_down']}",f"{variables['mismatches']}"])
+    reads_trimer.main([f"{variables['sequencing_files'][0]}",
+                       f"{variables['directory']}",
+                       f"{variables['sequence']}",
+                       f"{variables['seq_type']}",
+                       f"{variables['barcode']}",
+                       f"{variables['phred']}",
+                       f"{variables['barcode_up']}",
+                       f"{variables['barcode_down']}",
+                       f"{variables['barcode_up_miss']}",
+                       f"{variables['barcode_down_miss']}",
+                       f"{variables['mismatches']}",
+                       f"{variables['trimmed_after_tn']}"])
 
     variables["fastq_trimed"] = f'{variables["directory"]}/processed_reads_1.fastq'
 
@@ -136,10 +159,19 @@ def tn_trimmer_paired(variables):
     except IndexError:
         raise IndexError("Make sure you selected the correct sequencing type, or that the .gz files are labelled accordingly")
 
-    reads_trimer.main([f"{variables['sequencing_files'][0]}",f"{variables['directory']}",f"{variables['sequence']}",\
-                       f"{variables['seq_type']}",f"{variables['barcode']}",f"{variables['phred']}",\
-                       f"{variables['sequencing_files_r'][0]}",f"{variables['barcode_up']}",f"{variables['barcode_down']}",\
-                       f"{variables['mismatches']}"])
+    reads_trimer.main([f"{variables['sequencing_files'][0]}",
+                       f"{variables['directory']}",
+                       f"{variables['sequence']}",
+                       f"{variables['seq_type']}",
+                       f"{variables['barcode']}",
+                       f"{variables['phred']}",
+                       f"{variables['sequencing_files_r'][0]}",
+                       f"{variables['barcode_up']}",
+                       f"{variables['barcode_down']}",
+                       f"{variables['barcode_up_miss']}",
+                       f"{variables['barcode_down_miss']}",
+                       f"{variables['mismatches']}",
+                       f"{variables['trimmed_after_tn']}"])
 
     variables["fastq_trimed"] = [f'{variables["directory"]}/processed_reads_1.fastq']+\
                                 [f'{variables["directory"]}/processed_reads_2.fastq']
@@ -147,19 +179,29 @@ def tn_trimmer_paired(variables):
     return variables
 
 def sam_parser(variables):
-    sam_to_insertions.main([f"{variables['directory']}",f"{variables['strain']}",\
-                            f"{variables['seq_type']}",f"{variables['read_threshold']}",\
-                            f"{variables['read_value']}",f"{variables['barcode']}",\
-                            f"{variables['MAPQ']}"])
+    sam_to_insertions.main([f"{variables['directory']}",
+                            f"{variables['strain']}",
+                            f"{variables['seq_type']}",
+                            f"{variables['read_threshold']}",
+                            f"{variables['read_value']}",
+                            f"{variables['barcode']}",
+                            f"{variables['MAPQ']}",
+                            f"{variables['annotation_file']}"])
 
 def essentials(variables):
-    Essential_Finder.main([f'{variables["directory"]}',f'{variables["strain"]}',f'{variables["annotation_type"]}',\
-                           f'{variables["annotation_folder"]}',\
-                           f'{variables["subdomain_length_down"]}',f'{variables["subdomain_length_up"]}',f'{variables["pvalue"]}'])
+    Essential_Finder.main([f'{variables["directory"]}',
+                           f'{variables["strain"]}',
+                           f'{variables["annotation_type"]}',
+                           f'{variables["annotation_folder"]}',
+                           f'{variables["subdomain_length_down"]}',
+                           f'{variables["subdomain_length_up"]}',
+                           f'{variables["pvalue"]}'])
 
 def insertions_plotter(variables):     
-    insertions_over_genome_plotter.main([f'{variables["directory"]}',f'{variables["seq_file"]}',\
-                                         f'{variables["annotation_type"]}',f'{variables["strain"]}'])
+    insertions_over_genome_plotter.main([f'{variables["directory"]}',
+                                         f'{variables["seq_file"]}',
+                                         f'{variables["annotation_type"]}',
+                                         f'{variables["strain"]}'])
         
 def subprocess_cmd(command):
     try:
@@ -180,10 +222,12 @@ def input_parser(variables):
     parser.add_argument("--m",nargs='?',const=None,help="Mismatches in the transposon border sequence (default is 0)")
     parser.add_argument("--k",nargs='?',const=False,help="Remove intermediate files. Default is yes, remove.")
     parser.add_argument("--e",nargs='?',const=False,help="Run only the essential determing script. required the all_insertions_STRAIN.csv file to have been generated first.")
-    parser.add_argument("--t",nargs='?',const=False,help="Run without searching for a transposon sequence, and triming the .fastq file")
+    parser.add_argument("--t",nargs='?',const=False,help="Trims to the indicated nucleotides length AFTER finding the transposon sequence. For example, 100 would mean to keep the 100bp after the transposon (this trimmed read will be used for alignement after)")
     parser.add_argument("--b",nargs='?',const=False,help="Run with barcode extraction")
     parser.add_argument("--b1",nargs='?',const=False,help="upstream barcode sequence (example: ATC)")
     parser.add_argument("--b2",nargs='?',const=False,help="downstream barcode sequence (example: CTA)")
+    parser.add_argument("--b1m",nargs='?',const=False,help="upstream barcode sequence mismatches")
+    parser.add_argument("--b2m",nargs='?',const=False,help="downstream barcode sequence mismatches")
     parser.add_argument("--rt",nargs='?',const=False,help="Read threshold number")
     parser.add_argument("--ne",nargs='?',const=False,help="Run without essential Finding")
     parser.add_argument("--ph",nargs='?',const=1,help="Phred Score (removes reads where nucleotides have lower phred scores)")
@@ -210,12 +254,15 @@ def input_parser(variables):
         variables["trim"] = True
         if args.m is not None:
             variables["mismatches"] = int(args.m)
-        print("Running with transposon triming\n")
-
+            
     variables["remove"]=True
     if args.k is False:
         variables["remove"]=False
         print("Keeping all intermediate files\n")
+        
+    variables["trimmed_after_tn"]=-1
+    if args.t is not None:
+        variables["trimmed_after_tn"]=int(args.t)
         
     variables["barcode"]=False
     if args.b is not None:
@@ -224,9 +271,13 @@ def input_parser(variables):
     
     variables["barcode_up"] = None
     variables["barcode_down"] = None
+    variables["mismatches"] = 0 
+    variables["mismatches"] = 0 
     if variables["barcode"]:
         variables["barcode_up"] = args.b1
         variables["barcode_down"] = args.b2
+        variables['barcode_up_miss'] = args.b1m
+        variables['barcode_down_miss'] = args.b2m
 
     variables["read_threshold"]=False
     variables["read_value"] = 0

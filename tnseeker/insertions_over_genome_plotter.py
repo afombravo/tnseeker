@@ -198,12 +198,12 @@ def plotter(directory,annotation,anno_type,strain):
     ax2.set_ylim(0, np.log(1000000))
 
     plt.yticks([])
-    sns.distplot(np.log(df['reads']), hist=True, kde=True, 
-                 bins=10, color = 'darkblue', 
-                 hist_kws={'edgecolor':'black'},
-                 kde_kws={'linewidth': 4},
-                 vertical=True)
-    
+
+    sns.kdeplot(
+               y=np.log(df['reads']),
+               fill=True, common_norm=False,
+               alpha=.5, linewidth=0)
+
     adjust_spines(ax2, ['left', 'bottom'], (0, ax2.get_xlim()[1]), (ax2.get_ylim()))
     
     plt.savefig(f"{directory}/reads.png", dpi=300,bbox_inches='tight')

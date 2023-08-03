@@ -82,13 +82,13 @@ def write(listing, name, folder_path):
             for item1 in item:
                 text_file.write(item1 + "\n")
 
-def barcodeID(sequence,sequence_bin,borders):
-    border_up = imperfect_find(sequence_bin,borders[0],1)
-    border_down = imperfect_find(sequence_bin,borders[1],1)
+def barcodeID(sequence,sequence_bin,borders,miss_up,miss_down):
+    border_up = imperfect_find(sequence_bin,borders[0],miss_up)
+    border_down = imperfect_find(sequence_bin,borders[1],miss_down)
     if (border_up is not None) & (border_down is not None):
         return sequence[border_up+len(borders[0]):border_down]
 
-def read_trimer(reading,sequences,quality_set,mismatches,borders="",barcode_allow=False):
+def read_trimer(reading,sequences,quality_set,mismatches,trimming_len,miss_up,miss_down,borders="",barcode_allow=False):
     processed_read = []
     barcode_pool = []
     for read in reading:
@@ -98,14 +98,20 @@ def read_trimer(reading,sequences,quality_set,mismatches,borders="",barcode_allo
 
         border_find = imperfect_find(sequence_bin,sequences,mismatches) 
         if border_find is not None:
-            read[1] = sequence[border_find+len(sequences):]
-            read[3] = quality[border_find+len(sequences):]
+            
+            start = border_find+len(sequences)
+            end = trimming_len
+            if trimming_len != -1:
+                end = start+trimming_len
+                
+            read[1] = sequence[start:end]
+            read[3] = quality[start:end]
 
             if (len(quality_set.intersection(quality)) == 0):
                 read[0],read[2] = str(read[0],"utf-8"),str(read[2],"utf-8")
                 processed_read.append(read)
                 if barcode_allow:
-                    barcode = barcodeID(sequence,sequence_bin,borders)
+                    barcode = barcodeID(sequence,sequence_bin,borders,miss_up,miss_down)
                     if barcode is not None:
                         barcode_pool.append([barcode]+[read[0]])
 
@@ -118,7 +124,7 @@ def cpu():
     pool = multiprocessing.Pool(processes = c)
     return pool, c
       
-def extractor(fastq,folder_path,sequences,barcode,barcode_upstream,barcode_downstream,mismatches,phred = 1):
+def extractor(fastq,folder_path,sequences,barcode,barcode_upstream,barcode_downstream,mismatches,trimming_len,miss_up,miss_down,phred = 1):
     transposon_seq = seq2bin(sequences)
     if barcode:
         borders = [seq2bin(barcode_upstream),seq2bin(barcode_downstream)]
@@ -159,9 +165,11 @@ def extractor(fastq,folder_path,sequences,barcode,barcode_upstream,barcode_downs
                             
                         for read in subdivied:
                             if not barcode:
-                                result=pool.apply_async(read_trimer, args=((read,transposon_seq,quality_set,mismatches)))
+                                result=pool.apply_async(read_trimer, 
+                                                        args=((read,transposon_seq,quality_set,mismatches,trimming_len,miss_up,miss_down)))
                             else:
-                                result=pool.apply_async(read_trimer, args=((read,transposon_seq,quality_set,mismatches,borders,True)))
+                                result=pool.apply_async(read_trimer, 
+                                                        args=((read,transposon_seq,quality_set,mismatches,trimming_len,miss_up,miss_down,borders,True)))
                             result_objs.append(result)
                         pool.close()
                         pool.join()
@@ -182,10 +190,10 @@ def extractor(fastq,folder_path,sequences,barcode,barcode_upstream,barcode_downs
             print(f'Error parsing {file}')
             
     if not barcode:
-        trimmed,barcodes=read_trimer(read_bucket,transposon_seq,quality_set,0)
+        trimmed,barcodes=read_trimer(read_bucket,transposon_seq,quality_set,mismatches,trimming_len,miss_up,miss_down)
         write(trimmed, "/processed_reads_1.fastq", folder_path)
     else:
-        trimmed,barcodes=read_trimer(read_bucket,transposon_seq,quality_set,0,borders=borders)
+        trimmed,barcodes=read_trimer(read_bucket,transposon_seq,quality_set,mismatches,trimming_len,miss_up,miss_down,borders=borders)
         write(trimmed, "/processed_reads_1.fastq", folder_path)
         write(barcodes, "/barcodes_1.txt", folder_path)
     count_trimed+=len(trimmed)
@@ -249,18 +257,21 @@ def main(argv):
     sequences = argv[2]
     paired = argv[3]
     phred = int(argv[5])
-    mismatches = int(argv[-1])
+    mismatches = int(argv[-2])
+    trimming_len = int(argv[-1])
     
     barcode,barcode_upstream,barcode_downstream = False,None,None
     if argv[4] == "True":
         barcode = True
-        barcode_upstream = argv[-3]
-        barcode_downstream = argv[-2]
+        barcode_upstream = argv[-6]
+        barcode_downstream = argv[-5]
+        miss_up = int(argv[-4])
+        miss_down = int(argv[-3])
 
     print("Trimming Sequences")
 
     try:
-        extractor(fastq1,folder_path,sequences,barcode,barcode_upstream,barcode_downstream,mismatches,phred)
+        extractor(fastq1,folder_path,sequences,barcode,barcode_upstream,barcode_downstream,mismatches,trimming_len,miss_up,miss_down,phred)
     except Exception as e:
         print(e)
     
@@ -269,9 +280,9 @@ def main(argv):
         paired_ended_rearrange(fastq2,folder_path)
             
 if __name__ == "__main__":
-    if len(sys.argv) > 6:
-        argv = sys.argv[1:7] if sys.argv[4] == "PE" else sys.argv[1:6]
+    if len(sys.argv) > 7:
+        argv = sys.argv[1:10] if sys.argv[4] == "PE" else sys.argv[1:9]
         if argv[4] == "True":
-            argv.append(sys.argv[-3],sys.argv[-2],sys.argv[-1])
+            argv.append(sys.argv[-6],sys.argv[-5],sys.argv[-4])
     main(argv)
 

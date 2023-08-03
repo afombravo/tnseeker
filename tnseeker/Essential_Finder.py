@@ -1,7 +1,6 @@
 import csv
 import statsmodels.stats.multitest
 from Bio import SeqIO
-import scipy.stats
 import os,glob
 import numpy as np
 import scipy
@@ -223,13 +222,27 @@ def gene_info_parser_genbank(file):
             start = feature.location.start.position
             end = feature.location.end.position
             orientation = feature.location.strand
-            identity = feature.qualifiers['locus_tag'][0]
-            
-            if 'product' in feature.qualifiers:
-                product = feature.qualifiers['product'][0]
-            else:
-                product = feature.qualifiers['note'][0]
+
+            try:
+                identity = feature.qualifiers['locus_tag'][0]
                 
+            except KeyError:
+                identity = None
+ 
+            if orientation == 1:
+                orientation = "+"
+            else:
+                orientation = "-"
+            
+            try:
+                if 'product' in feature.qualifiers:
+                    product = feature.qualifiers['product'][0]
+                else:
+                    product = feature.qualifiers['note'][0]
+                    
+            except KeyError:
+                product = None
+
             for key, val in feature.qualifiers.items():   
                 if "pseudogene" in key:
                     gene = identity

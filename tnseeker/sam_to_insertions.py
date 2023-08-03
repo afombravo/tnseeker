@@ -4,6 +4,7 @@ import os, glob
 from regex import findall
 from matplotlib import pyplot as plt
 import argparse
+from Bio import SeqIO
 
 """ This script processes and analyzes sequencing data from a SAM (Sequence Alignment/Map) file. 
     The main purpose is to extract information about transposon insertions in a given genome 
@@ -53,9 +54,10 @@ def main(argv):
     read_cut = int(argv[4]) if read_threshold else 0
     barcode = argv[5] == "True"
     map_quality_threshold = int(argv[6])
+    gb_file = argv[7]
 
     pathing = path_finder(folder_path)
-    extractor(name_folder, folder_path, pathing, paired_ended,barcode,read_threshold,read_cut,map_quality_threshold)
+    extractor(name_folder, folder_path, pathing, paired_ended,barcode,read_threshold,read_cut,gb_file,map_quality_threshold)
 
 def path_finder(folder_path): 
     filenames = []
@@ -118,7 +120,9 @@ def plotter(insertion_count, naming, output_folder):
 
 class Insertion():
     
-    def __init__(self, contig=None, local=None, border=None, orientation=None,count=None,barcode=None,mapQ=0):
+    def __init__(self, contig=None, local=None, border=None, orientation=None,\
+                 count=None,barcode=None,name=None,product=None,gene_orient=None,
+                 relative_gene_pos=None,mapQ=0):
         
         self.contig = contig
         self.local = local
@@ -127,6 +131,10 @@ class Insertion():
         self.count = count
         self.mapQ = mapQ
         self.barcode = barcode or {}
+        self.name = name
+        self.product = product
+        self.gene_orient = gene_orient
+        self.relative_gene_pos = relative_gene_pos
 
 def insertion_counter(current, contig, local, orientation, border):
 
@@ -148,7 +156,7 @@ def read_count(dictionary):
         
     return count
 
-def extractor(name_folder, folder_path, pathing, paired_ended,barcode,read_threshold,read_cut,map_quality_threshold = 42):
+def extractor(name_folder, folder_path, pathing, paired_ended,barcode,read_threshold,read_cut,gb_file,map_quality_threshold = 42):
     
     def barcode_finder():
         read = ""
@@ -246,8 +254,13 @@ def extractor(name_folder, folder_path, pathing, paired_ended,barcode,read_thres
 
     if read_threshold:
         insertion_count,redundancy_barcode=dict_filter(insertion_count,read_cut,redundancy_barcode,barcode)
+        
+    insertion_count = gene_parser_genbank(gb_file,insertion_count)
+    
     if barcode:
-        insert_parser(insertion_count,barcode,name_folder, folder_path,redundancy_barcode)
+        insert_parser(insertion_count,name_folder, folder_path,redundancy_barcode)
+        
+        
     dictionary_parser(insertion_count,barcode,folder_path,name_folder)
         
     q = plotter(insertion_count, f"Unique insertions_{name_folder}", folder_path)
@@ -275,9 +288,9 @@ def dict_filter(dictionary,read_cut,redundancy_barcode,barcode):
                         del redundancy_barcode[key1]
     return dictionary,redundancy_barcode
 
-def insert_parser(insertion_count,barcode,name_folder, folder_path,redundancy_barcode):    
-    insertions = []
-    for key in insertion_count: #average bowtie Q
+def insert_parser(insertion_count,name_folder, folder_path,redundancy_barcode):    
+    insertions,barcoded_insertions = [],[]
+    for key in insertion_count: 
         insertion_count[key].mapQ = insertion_count[key].mapQ / insertion_count[key].count
         
         contig = [insertion_count[key].contig]
@@ -285,33 +298,112 @@ def insert_parser(insertion_count,barcode,name_folder, folder_path,redundancy_ba
         orientation = [insertion_count[key].orientation]
         count = [insertion_count[key].count]
         mapq = [insertion_count[key].mapQ]
+        gene_name = [insertion_count[key].name]
+        gene_product = [insertion_count[key].product]
+        gene_orientation = [insertion_count[key].gene_orient]
+        relative_gene_pos = [insertion_count[key].relative_gene_pos]
         
         barcodes,reads = '',0
-        if barcode:
-            for bar,read in insertion_count[key].barcode.items():
-                unique = 0
-                key1 = (contig[0], local[0], orientation[0], bar)
-                if redundancy_barcode[key1]:
-                    unique = 1
-                barcodes += f'{bar}:{read}:{unique};'
-                reads += read
+        for bar,read in insertion_count[key].barcode.items():
+            unique = 0
+            key1 = (contig[0], local[0], orientation[0], bar)
+            if redundancy_barcode[key1]:
+                unique = 1
+            barcodes += f'{bar}:{read}:{unique};'
+            reads += read
             
-        insertions.append(contig + local + orientation + count + mapq + [len(insertion_count[key].barcode)] + [reads] + [barcodes])
+            ## for individual barcoded insertions
+            barcoded_insertions.append([bar] + [read] + [unique] + contig + local +\
+                                       orientation + count + mapq + gene_name + \
+                                       gene_product + gene_orientation + relative_gene_pos)
+            
+        insertions.append(contig + local + orientation + count + mapq + \
+                          gene_name + gene_product + gene_orientation + relative_gene_pos + \
+                          [len(insertion_count[key].barcode)] + [reads] + [barcodes])
     
     insertions.insert(0, ["#Contig"] + ["position"] + ["Orientation"] + ["Total Reads"] + \
-                      ["Average MapQ"] + ["Number of different barcodes in coordinate"] + \
+                      ["Average MapQ"] + ["Gene Name"] + ["Gene Product"] + ["Gene Orientation"] + \
+                      ["Relative Position in Gene (0-1)"] + ["Number of different barcodes in coordinate"] + \
                       ["Total barcode Reads"] + ["Barcodes (barcode:read:unique)"])
     
-    name = "barcoded_insertions_%s" % name_folder
-    output_file_path = os.path.join(folder_path, name + ".csv")
+    name = f"barcoded_insertions_{name_folder}.csv"
+    output_file_path = os.path.join(folder_path, name)
     with open(output_file_path, "w", newline='') as output:
         writer = csv.writer(output)
         writer.writerows(insertions)
+    
+    ############
+    
+    barcoded_insertions.insert(0, ["#Barcode"] + ["Barcode Reads"] + ["Barcode Unique in File"] +\
+                               ["Contig"] + ["position"] + ["Orientation"] + ["Total Reads in position"] + \
+                              ["Average MapQ"] + ["Gene Name"] + ["Gene Product"] + ["Gene Orientation"] + \
+                              ["Relative Position in Gene (0-1)"])
+        
+    name = f"annotated_barcodes_{name_folder}.csv"
+    output_file_path = os.path.join(folder_path, name)
+    with open(output_file_path, "w", newline='') as output:
+        writer = csv.writer(output)
+        writer.writerows(barcoded_insertions)
+
+def gene_parser_genbank(gb_file,insertion_count):
+    
+    ''' The gene_info_parser_genbank function takes a genbank file as input and 
+    extracts gene information, storing it in a dictionary with Gene class 
+    instances as values. It parses the file using the SeqIO module, 
+    retrieving attributes such as start, end, orientation, identity, 
+    and product for each gene.''' 
+    
+    for rec in SeqIO.parse(gb_file, "gb"):
+        for feature in rec.features:
+            if feature.type != 'source':
+                start = feature.location.start.position
+                end = feature.location.end.position
+                domain_size = end - start
                 
+                orientation = feature.location.strand
+                
+                try:
+                    identity = feature.qualifiers['locus_tag'][0]
+                except KeyError:
+                    identity = None
+
+                if orientation == 1:
+                    orientation = "+"
+                else:
+                    orientation = "-"
+                
+                try:
+                    if 'product' in feature.qualifiers:
+                        product = feature.qualifiers['product'][0]
+                    else:
+                        product = feature.qualifiers['note'][0]
+                except KeyError:
+                    product = None
+                    
+                for key, val in feature.qualifiers.items():   
+                    if "pseudogene" in key:
+                        gene = identity
+                        break #avoids continuing the iteration and passing to another key, which would make "gene" assume another value
+                    elif "gene" in key:
+                        gene = feature.qualifiers['gene'][0]
+                        break #avoids continuing the iteration and passing to another key, which would make "gene" assume another value
+                    else:
+                        gene = identity
+                
+                for key in insertion_count:
+                    if insertion_count[key].contig == rec.id:
+                        if (int(insertion_count[key].local) >= start) & (int(insertion_count[key].local) <= end):
+                            insertion_count[key].name = gene
+                            insertion_count[key].product = product
+                            insertion_count[key].gene_orient = orientation
+                            insertion_count[key].relative_gene_pos = (int(insertion_count[key].local) - start) / domain_size
+                      
+    return insertion_count
+
 def dictionary_parser(dictionary,barcode,folder_path,name_folder):
     
     insertions = []
-    
+
     for key in dictionary:
         
         contig = [dictionary[key].contig]
@@ -319,9 +411,18 @@ def dictionary_parser(dictionary,barcode,folder_path,name_folder):
         orientation = [dictionary[key].orientation]
         border = [dictionary[key].seq]
         count = [dictionary[key].count]
-
-        insertions.append(contig + local + orientation + border + count)
-    insertions.insert(0, ["#Contig"] + ["position"] + ["Orientation"] + ["Transposon Border Sequence"] + ["Read Counts"])
+        gene_name = [dictionary[key].name]
+        gene_product = [dictionary[key].product]
+        gene_orientation = [dictionary[key].gene_orient]
+        relative_gene_pos = [dictionary[key].relative_gene_pos]
+        
+        insertions.append(contig + local + orientation + border + count + \
+                          gene_name + gene_product + gene_orientation + relative_gene_pos)
+            
+    insertions.insert(0, ["#Contig"] + ["position"] + ["Orientation"] + \
+                      ["Transposon Border Sequence"] + ["Read Counts"] + \
+                      ["Gene Name"] + ["Gene Product"] + ["Gene Orientation"] + \
+                      ["Relative Position in Gene (0-1)"])
     
     getNextFilePath(folder_path, "all_insertions_"+name_folder, insertions) #all the unique insertions
 
@@ -334,7 +435,15 @@ if __name__ == "__main__":
     parser.add_argument("read_cut", type=int, help="Read cut value.")
     parser.add_argument("barcode", type=bool, help="Use barcodes (True/False).")
     parser.add_argument("map_quality_threshold", type=int, help="Map quality threshold.")
+    parser.add_argument("gb_annotation_file", type=int, help="Needs to be a standard .gb file")
 
     args = parser.parse_args()
     
-    main([args.folder_path, args.name_folder, args.paired_ended, args.read_threshold, args.read_cut, args.barcode, args.map_quality_threshold])
+    main([args.folder_path, 
+          args.name_folder, 
+          args.paired_ended, 
+          args.read_threshold, 
+          args.read_cut, 
+          args.barcode, 
+          args.map_quality_threshold,
+          args.gb_annotation_file])
