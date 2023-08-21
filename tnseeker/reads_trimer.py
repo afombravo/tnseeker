@@ -88,7 +88,8 @@ def barcodeID(sequence,sequence_bin,borders,miss_up,miss_down):
     if (border_up is not None) & (border_down is not None):
         return sequence[border_up+len(borders[0]):border_down]
 
-def read_trimer(reading,sequences,quality_set,mismatches,trimming_len,miss_up,miss_down,borders="",barcode_allow=False):
+def read_trimer(reading,sequences,quality_set,mismatches,trimming_len,miss_up,\
+                miss_down,quality_set_bar_up,quality_set_bar_down,borders="",barcode_allow=False):
     processed_read = []
     barcode_pool = []
     for read in reading:
@@ -100,12 +101,13 @@ def read_trimer(reading,sequences,quality_set,mismatches,trimming_len,miss_up,mi
         if border_find is not None:
             
             start = border_find+len(sequences)
-            end = trimming_len
             if trimming_len != -1:
                 end = start+trimming_len
-                
-            read[1] = sequence[start:end]
-            read[3] = quality[start:end]
+                read[1] = sequence[start:end]
+                read[3] = quality[start:end]
+            else:
+                read[1] = sequence[start:]
+                read[3] = quality[start:]
 
             if (len(quality_set.intersection(quality)) == 0):
                 read[0],read[2] = str(read[0],"utf-8"),str(read[2],"utf-8")
@@ -113,7 +115,8 @@ def read_trimer(reading,sequences,quality_set,mismatches,trimming_len,miss_up,mi
                 if barcode_allow:
                     barcode = barcodeID(sequence,sequence_bin,borders,miss_up,miss_down)
                     if barcode is not None:
-                        barcode_pool.append([barcode]+[read[0]])
+                        if (len(quality_set_bar_up.intersection(quality)) == 0) & (len(quality_set_bar_down.intersection(quality)) == 0):
+                            barcode_pool.append([barcode]+[read[0]])
 
     return [processed_read,barcode_pool]
                 
@@ -124,10 +127,10 @@ def cpu():
     pool = multiprocessing.Pool(processes = c)
     return pool, c
       
-def extractor(fastq,folder_path,sequences,barcode,barcode_upstream,barcode_downstream,mismatches,trimming_len,miss_up,miss_down,phred = 1):
-    transposon_seq = seq2bin(sequences)
-    if barcode:
-        borders = [seq2bin(barcode_upstream),seq2bin(barcode_downstream)]
+def extractor(fastq,folder_path,sequences,barcode,barcode_upstream,barcode_downstream,\
+              mismatches,trimming_len,miss_up,miss_down,phred_up,phred_down,phred = 1):
+    
+    transposon_seq = seq2bin(sequences)  
     reading = []
     read_bucket=[]
     pool, cpus = cpu()
@@ -139,6 +142,12 @@ def extractor(fastq,folder_path,sequences,barcode,barcode_upstream,barcode_downs
         phred = 1
     quality_set = set(quality_list[:phred-1])
     
+    quality_set_bar_up,quality_set_bar_down = None,None
+    if barcode:
+        borders = [seq2bin(barcode_upstream),seq2bin(barcode_downstream)]
+        quality_set_bar_up = set(quality_list[:phred_up-1])
+        quality_set_bar_down = set(quality_list[:phred_down-1])
+
     file_number = len(fastq)
     file_counter = 0
     for file in fastq:
@@ -169,7 +178,8 @@ def extractor(fastq,folder_path,sequences,barcode,barcode_upstream,barcode_downs
                                                         args=((read,transposon_seq,quality_set,mismatches,trimming_len,miss_up,miss_down)))
                             else:
                                 result=pool.apply_async(read_trimer, 
-                                                        args=((read,transposon_seq,quality_set,mismatches,trimming_len,miss_up,miss_down,borders,True)))
+                                                        args=((read,transposon_seq,quality_set,mismatches,trimming_len,miss_up,miss_down,\
+                                                               quality_set_bar_up,quality_set_bar_down,borders,True)))
                             result_objs.append(result)
                         pool.close()
                         pool.join()
@@ -190,10 +200,12 @@ def extractor(fastq,folder_path,sequences,barcode,barcode_upstream,barcode_downs
             print(f'Error parsing {file}')
             
     if not barcode:
-        trimmed,barcodes=read_trimer(read_bucket,transposon_seq,quality_set,mismatches,trimming_len,miss_up,miss_down)
+        trimmed,barcodes=read_trimer(read_bucket,transposon_seq,quality_set,mismatches,trimming_len,miss_up,miss_down,
+                                     quality_set_bar_up,quality_set_bar_down)
         write(trimmed, "/processed_reads_1.fastq", folder_path)
     else:
-        trimmed,barcodes=read_trimer(read_bucket,transposon_seq,quality_set,mismatches,trimming_len,miss_up,miss_down,borders=borders)
+        trimmed,barcodes=read_trimer(read_bucket,transposon_seq,quality_set,mismatches,trimming_len,miss_up,miss_down,
+                                     quality_set_bar_up,quality_set_bar_down,borders=borders)
         write(trimmed, "/processed_reads_1.fastq", folder_path)
         write(barcodes, "/barcodes_1.txt", folder_path)
     count_trimed+=len(trimmed)
@@ -260,18 +272,22 @@ def main(argv):
     mismatches = int(argv[-2])
     trimming_len = int(argv[-1])
     
-    barcode,barcode_upstream,barcode_downstream = False,None,None
+    barcode,barcode_upstream,barcode_downstream,miss_up,miss_down,phred_up,phred_down = False,None,None,None,None,None,None
     if argv[4] == "True":
         barcode = True
-        barcode_upstream = argv[-6]
-        barcode_downstream = argv[-5]
-        miss_up = int(argv[-4])
-        miss_down = int(argv[-3])
+        barcode_upstream = argv[-8]
+        barcode_downstream = argv[-7]
+        miss_up = int(argv[-6])
+        miss_down = int(argv[-5])
+        phred_up = int(argv[-4])
+        phred_down = int(argv[-3])
 
     print("Trimming Sequences")
 
     try:
-        extractor(fastq1,folder_path,sequences,barcode,barcode_upstream,barcode_downstream,mismatches,trimming_len,miss_up,miss_down,phred)
+        extractor(fastq1,folder_path,sequences,barcode,barcode_upstream,\
+                  barcode_downstream,mismatches,trimming_len,miss_up,miss_down,\
+                  phred_up,phred_down,phred)
     except Exception as e:
         print(e)
     
@@ -281,7 +297,7 @@ def main(argv):
             
 if __name__ == "__main__":
     if len(sys.argv) > 7:
-        argv = sys.argv[1:10] if sys.argv[4] == "PE" else sys.argv[1:9]
+        argv = sys.argv[1:12] if sys.argv[4] == "PE" else sys.argv[1:11]
         if argv[4] == "True":
             argv.append(sys.argv[-6],sys.argv[-5],sys.argv[-4])
     main(argv)

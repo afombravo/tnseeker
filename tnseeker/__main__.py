@@ -134,6 +134,21 @@ def bowtie_aligner_maker_paired(variables):
         os.remove(variables['fastq_trimed'][0])
         os.remove(variables['fastq_trimed'][1])
 
+def tn_compiler(variables):
+    import gzip
+    variables["fastq_trimed"] = f'{variables["directory"]}/processed_reads_1.fastq'
+    
+    pathing = []
+    for filename in glob.glob(os.path.join(variables['sequencing_files'][0], '*.gz')):
+        pathing.append(filename) 
+                  
+    for file in pathing:
+        with gzip.open(file, "rb") as firstfile, open(variables["fastq_trimed"],"wb") as secondfile:
+            for line in firstfile:
+                secondfile.write(line)
+                
+    return variables
+
 def tn_trimmer_single(variables):
 
     reads_trimer.main([f"{variables['sequencing_files'][0]}",
@@ -146,7 +161,9 @@ def tn_trimmer_single(variables):
                        f"{variables['barcode_down']}",
                        f"{variables['barcode_up_miss']}",
                        f"{variables['barcode_down_miss']}",
-                       f"{variables['mismatches']}",
+                       f"{variables['barcode_up_phred']}",
+                       f"{variables['barcode_down_phred']}",
+                       f"{variables['tn_mismatches']}",
                        f"{variables['trimmed_after_tn']}"])
 
     variables["fastq_trimed"] = f'{variables["directory"]}/processed_reads_1.fastq'
@@ -170,7 +187,9 @@ def tn_trimmer_paired(variables):
                        f"{variables['barcode_down']}",
                        f"{variables['barcode_up_miss']}",
                        f"{variables['barcode_down_miss']}",
-                       f"{variables['mismatches']}",
+                       f"{variables['barcode_up_phred']}",
+                       f"{variables['barcode_down_phred']}",
+                       f"{variables['tn_mismatches']}",
                        f"{variables['trimmed_after_tn']}"])
 
     variables["fastq_trimed"] = [f'{variables["directory"]}/processed_reads_1.fastq']+\
@@ -186,7 +205,8 @@ def sam_parser(variables):
                             f"{variables['read_value']}",
                             f"{variables['barcode']}",
                             f"{variables['MAPQ']}",
-                            f"{variables['annotation_file']}"])
+                            f"{variables['annotation_file']}",
+                            f"{variables['intergenic_size_cutoff']}"])
 
 def essentials(variables):
     Essential_Finder.main([f'{variables["directory"]}',
@@ -195,7 +215,8 @@ def essentials(variables):
                            f'{variables["annotation_folder"]}',
                            f'{variables["subdomain_length_down"]}',
                            f'{variables["subdomain_length_up"]}',
-                           f'{variables["pvalue"]}'])
+                           f'{variables["pvalue"]}',
+                           f"{variables['intergenic_size_cutoff']}"])
 
 def insertions_plotter(variables):     
     insertions_over_genome_plotter.main([f'{variables["directory"]}',
@@ -228,10 +249,13 @@ def input_parser(variables):
     parser.add_argument("--b2",nargs='?',const=False,help="downstream barcode sequence (example: CTA)")
     parser.add_argument("--b1m",nargs='?',const=False,help="upstream barcode sequence mismatches")
     parser.add_argument("--b2m",nargs='?',const=False,help="downstream barcode sequence mismatches")
+    parser.add_argument("--b1p",nargs='?',const=False,help="upstream barcode sequence Phred-score filtering. Default is no filtering")
+    parser.add_argument("--b2p",nargs='?',const=False,help="downstream barcode sequence Phred-score filtering. Default is no filtering")
     parser.add_argument("--rt",nargs='?',const=False,help="Read threshold number")
     parser.add_argument("--ne",nargs='?',const=False,help="Run without essential Finding")
     parser.add_argument("--ph",nargs='?',const=1,help="Phred Score (removes reads where nucleotides have lower phred scores)")
     parser.add_argument("--mq",nargs='?',const=0,help="Bowtie2 MAPQ threshold")
+    parser.add_argument("--ig",nargs='?',const=0,help="The number of bp up and down stream of any gene to be considered an intergenic region")
     
     parser.add_argument("--pv",nargs='?',const=None,help="Essential Finder pvalue threshold for essentiality determination")
     parser.add_argument("--sl5",nargs='?',const=None,help="5' gene trimming percent for essentiality determination (number between 0 and 1)")
@@ -242,19 +266,23 @@ def input_parser(variables):
     if (args.s is None) or (args.sd is None) or (args.ad is None) or (args.at is None) or (args.st is None):
         print(parser.print_usage())
         raise ValueError("No arguments given")
-
+    
+    variables["version"]="1.0.0"
+    print(f'Version: {variables["version"]}\n')
+    
     variables["full"]=True
     if args.e is not None:
         variables["full"] = False
         print("Running in essentials finder only mode\n")
         
     variables["trim"]=False
-    variables["mismatches"] = 0 
+    variables["tn_mismatches"] = 0 
     if args.tn is not None:
         variables["trim"] = True
+
         if args.m is not None:
-            variables["mismatches"] = int(args.m)
-            
+            variables["tn_mismatches"] = int(args.m)   
+
     variables["remove"]=True
     if args.k is False:
         variables["remove"]=False
@@ -268,16 +296,30 @@ def input_parser(variables):
     if args.b is not None:
         variables["barcode"] = True
         print("Running with barcode finding\n")
+        
+    variables["intergenic_size_cutoff"]=0
+    if args.ig is not None:
+        variables["intergenic_size_cutoff"] = int(args.ig)
     
     variables["barcode_up"] = None
     variables["barcode_down"] = None
-    variables["mismatches"] = 0 
-    variables["mismatches"] = 0 
+    variables["barcode_up_miss"] = 0 
+    variables["barcode_down_miss"] = 0 
+    variables["barcode_up_phred"] = 1
+    variables["barcode_down_phred"] = 1
     if variables["barcode"]:
         variables["barcode_up"] = args.b1
         variables["barcode_down"] = args.b2
         variables['barcode_up_miss'] = args.b1m
         variables['barcode_down_miss'] = args.b2m
+        if args.b1p is not None:
+            variables["barcode_down_phred"] = int(args.b2p)
+            if variables["barcode_down_phred"] < 1:
+                variables["barcode_down_phred"]  = 1
+        if args.b2p is not None:
+            variables["barcode_down_phred"] = int(args.b2p)
+            if variables["barcode_down_phred"] < 1:
+                variables["barcode_down_phred"]  = 1
 
     variables["read_threshold"]=False
     variables["read_value"] = 0
@@ -339,7 +381,7 @@ def main():
                                          variables['sequencing_files_r'][0]]
             if variables["trim"]:
                 variables = tn_trimmer_paired(variables)
-                
+
             print("Aligning Sequences")
             bowtie_aligner_maker_paired(variables)
             
@@ -347,8 +389,11 @@ def main():
             
             print("Running in single-end mode")
             variables["fastq_trimed"] = variables['sequencing_files'][0]
+
             if variables["trim"]:
                 variables = tn_trimmer_single(variables)
+            else:
+                variables = tn_compiler(variables)
                 
             print("Aligning Sequences")
             bowtie_aligner_maker_single(variables)

@@ -55,9 +55,11 @@ def main(argv):
     barcode = argv[5] == "True"
     map_quality_threshold = int(argv[6])
     gb_file = argv[7]
+    ir_size_cutoff = int(argv[8])
 
     pathing = path_finder(folder_path)
-    extractor(name_folder, folder_path, pathing, paired_ended,barcode,read_threshold,read_cut,gb_file,map_quality_threshold)
+    extractor(name_folder, folder_path, pathing, paired_ended,barcode,\
+              read_threshold,read_cut,gb_file,ir_size_cutoff,map_quality_threshold)
 
 def path_finder(folder_path): 
     filenames = []
@@ -156,7 +158,8 @@ def read_count(dictionary):
         
     return count
 
-def extractor(name_folder, folder_path, pathing, paired_ended,barcode,read_threshold,read_cut,gb_file,map_quality_threshold = 42):
+def extractor(name_folder, folder_path, pathing, paired_ended,barcode,\
+              read_threshold,read_cut,gb_file,ir_size_cutoff,map_quality_threshold = 42):
     
     def barcode_finder():
         read = ""
@@ -256,10 +259,10 @@ def extractor(name_folder, folder_path, pathing, paired_ended,barcode,read_thres
         insertion_count,redundancy_barcode=dict_filter(insertion_count,read_cut,redundancy_barcode,barcode)
         
     insertion_count = gene_parser_genbank(gb_file,insertion_count)
+    insertion_count = inter_gene_annotater(gb_file,insertion_count,genome_size,ir_size_cutoff)
     
     if barcode:
         insert_parser(insertion_count,name_folder, folder_path,redundancy_barcode)
-        
         
     dictionary_parser(insertion_count,barcode,folder_path,name_folder)
         
@@ -269,7 +272,7 @@ def extractor(name_folder, folder_path, pathing, paired_ended,barcode,read_thres
     
     e = "Number of total unique insertions: {}\n".format(len(insertion_count))
     count = read_count(insertion_count)
-    f = f"Total number of reads attributed to unique insertions: {count} ({round(count/aligned_valid_reads*100,2)}%)\n"
+    f = f"Total number of reads attributed to unique insertions: {count}\n"
     print(reads,e,f)
     
     if barcode:
@@ -345,6 +348,69 @@ def insert_parser(insertion_count,name_folder, folder_path,redundancy_barcode):
         writer = csv.writer(output)
         writer.writerows(barcoded_insertions)
 
+def inter_gene_annotater(gb_file,insertion_count,genome_size,ir_size_cutoff):
+    genes = []
+    for rec in SeqIO.parse(gb_file, "gb"):
+        for feature in rec.features:
+            if feature.type != 'source':
+                start = feature.location.start.position+1
+                end = feature.location.end.position-1
+                orientation = feature.location.strand
+                if orientation == -1:
+                    orientation = '-'
+                else:
+                    orientation = '+'
+                try:
+                    identity = feature.qualifiers['locus_tag'][0]
+                except KeyError:
+                    identity = 'Undefined'
+                    
+                for key, val in feature.qualifiers.items():   
+                    if "pseudogene" in key:
+                        gene = identity
+                        break 
+                    elif "gene" in key:
+                        gene = feature.qualifiers['gene'][0]
+                        break 
+                    else:
+                        gene = identity
+                        
+                key = (start,end,orientation,gene)
+                genes.append((start,end,orientation,gene))
+    
+    genes = list(dict.fromkeys(genes))
+    
+    ir_annotation = {}
+    count = 0
+    for i,gene in enumerate(genes[:-1]):
+        gene_down_start_border = ir_size_cutoff + gene[1]
+        gene_up_start_border = genes[i+1][0] - ir_size_cutoff
+        domain_size = gene_up_start_border - gene_down_start_border
+        if domain_size >= 1:
+            count += 1
+            ir_annotation[f'IR_{count}_{gene[3]}_{gene[2]}_UNTIL_{genes[i+1][3]}_{gene[2]}'] = (gene[1],genes[i+1][0],domain_size)
+            
+    circle_closer = genes[-1][1] + ir_size_cutoff 
+    domain_size = genome_size - circle_closer
+    if domain_size >= 1:
+        count += 1
+        ir_annotation[f'IR_{count}_{genes[-1][3]}_{gene[2]}_genome-end'] = (genes[-1][1],genome_size,domain_size)
+    
+    domain_size = genes[0][0] - ir_size_cutoff
+    if domain_size  >= 1:
+        count += 1
+        ir_annotation[f'IR_{count}_genome-start_{genes[0][3]}_{gene[2]}'] = (0,genes[0][0],domain_size)
+    
+    for ir in ir_annotation:
+        for key in insertion_count:
+            if insertion_count[key].name is None:
+                if insertion_count[key].contig == rec.id:
+                    if (int(insertion_count[key].local) >= ir_annotation[ir][0]) & (int(insertion_count[key].local) <= ir_annotation[ir][1]):
+                        insertion_count[key].name = ir
+                        insertion_count[key].relative_gene_pos = (int(insertion_count[key].local) - ir_annotation[ir][0]) / ir_annotation[ir][2]
+
+    return insertion_count
+
 def gene_parser_genbank(gb_file,insertion_count):
     
     ''' The gene_info_parser_genbank function takes a genbank file as input and 
@@ -405,6 +471,8 @@ def dictionary_parser(dictionary,barcode,folder_path,name_folder):
     insertions = []
 
     for key in dictionary:
+        if not barcode:
+            dictionary[key].mapQ = dictionary[key].mapQ / dictionary[key].count
         
         contig = [dictionary[key].contig]
         local = [dictionary[key].local]
@@ -415,14 +483,15 @@ def dictionary_parser(dictionary,barcode,folder_path,name_folder):
         gene_product = [dictionary[key].product]
         gene_orientation = [dictionary[key].gene_orient]
         relative_gene_pos = [dictionary[key].relative_gene_pos]
+        mapQ = [dictionary[key].mapQ]
         
-        insertions.append(contig + local + orientation + border + count + \
+        insertions.append(contig + local + orientation + border + count + mapQ +\
                           gene_name + gene_product + gene_orientation + relative_gene_pos)
             
     insertions.insert(0, ["#Contig"] + ["position"] + ["Orientation"] + \
                       ["Transposon Border Sequence"] + ["Read Counts"] + \
-                      ["Gene Name"] + ["Gene Product"] + ["Gene Orientation"] + \
-                      ["Relative Position in Gene (0-1)"])
+                      ["Average mapQ across reads"] + ["Gene Name"] + ["Gene Product"] + \
+                      ["Gene Orientation"] + ["Relative Position in Gene (0-1)"])
     
     getNextFilePath(folder_path, "all_insertions_"+name_folder, insertions) #all the unique insertions
 
@@ -435,7 +504,8 @@ if __name__ == "__main__":
     parser.add_argument("read_cut", type=int, help="Read cut value.")
     parser.add_argument("barcode", type=bool, help="Use barcodes (True/False).")
     parser.add_argument("map_quality_threshold", type=int, help="Map quality threshold.")
-    parser.add_argument("gb_annotation_file", type=int, help="Needs to be a standard .gb file")
+    parser.add_argument("gb_annotation_file", help="Needs to be a standard .gb file")
+    parser.add_argument("ir_size_cutoff", type=int, help="The number of bp up and down stream of any gene to be considered an intergenic region")
 
     args = parser.parse_args()
     
@@ -446,4 +516,5 @@ if __name__ == "__main__":
           args.read_cut, 
           args.barcode, 
           args.map_quality_threshold,
-          args.gb_annotation_file])
+          args.gb_annotation_file,
+          args.ir_size_cutoff])

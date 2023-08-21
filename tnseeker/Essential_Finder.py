@@ -31,6 +31,7 @@ def inputs(argv):
     variables.annotation_folder = argv[3]
     variables.subdomain_length = [float(argv[4]),float(argv[5])]
     variables.pvalue = float(argv[6])
+    variables.ir_size_cutoff = int(argv[7])
     variables.output_name = variables.strain + "_alldomains"
     variables.true_positives = variables.annotation_folder + "/Truepositivs.csv"
     variables.true_negatives = variables.annotation_folder + "/Truenegativs.csv"
@@ -262,12 +263,55 @@ def gene_info_parser_genbank(file):
                 orientation = "-"
                 start = int(start+(domain_size*(1-variables.subdomain_length[1])))
                 end = int(start+(domain_size*(1-variables.subdomain_length[0])))
-
-            basket[identity] = Gene(gene=gene,start=start,end=end,orientation=orientation,\
+                
+            if identity != None:
+                basket[identity] = Gene(gene=gene,start=start,end=end,orientation=orientation,\
                                     identity=identity,product=product,contig=variables.annotation_contig)
-                                   
+    
+    basket = inter_gene_annotater(basket)
     return basket
-                     
+ 
+def inter_gene_annotater(basket):
+    
+    genes = list(dict.fromkeys(basket))
+
+    count = 0
+    for i,gene in enumerate(genes[:-1]):
+        gene_down_start_border = variables.ir_size_cutoff + basket[gene].start
+        gene_up_start_border = basket[genes[i+1]].end - variables.ir_size_cutoff
+        domain_size = gene_up_start_border - gene_down_start_border
+        if domain_size >= 1:
+            count += 1
+            ident = f'IR_{count}_{basket[gene].gene}_{basket[gene].orientation}_UNTIL_{basket[genes[i+1]].gene}_{basket[genes[i+1]].orientation}'
+            basket[ident] = Gene(gene=ident,
+                                start=basket[gene].start,
+                                end=basket[genes[i+1]].end,
+                                identity=ident,
+                                contig=variables.annotation_contig)
+            
+    circle_closer = basket[genes[-1]].end + variables.ir_size_cutoff
+    domain_size = variables.genome_length - circle_closer
+    if domain_size >= 1:
+        count += 1
+        ident = f'IR_{count}_{basket[genes[-1]].gene}_{basket[gene].orientation}_genome-end'
+        basket[ident] = Gene(gene=ident,
+                            start=basket[genes[-1]].end,
+                            end=variables.genome_length,
+                            identity=ident,
+                            contig=variables.annotation_contig)
+
+    domain_size = basket[genes[0]].start - variables.ir_size_cutoff
+    if domain_size  >= 1:
+        count += 1
+        ident = f'IR_{count}_genome-start_{basket[genes[0]].gene}_{basket[genes[0]].orientation}'
+        basket[ident] = Gene(gene=ident,
+                            start=0,
+                            end=basket[genes[0]].start,
+                            identity=ident,
+                            contig=variables.annotation_contig)
+
+    return basket
+                    
 def gene_info_parser_gff(file):
     
     ''' The gene_info_parser_gff function takes a GFF file as input and extracts 
@@ -312,7 +356,8 @@ def gene_info_parser_gff(file):
     
                     basket[feature["ID"]] = Gene(gene=gene,start=start,end=end,orientation=orientation,\
                                                     identity=feature["ID"],product=feature["product"],contig=contig)
-
+                    
+    basket = inter_gene_annotater(basket)
     return basket
 
 def domain_resizer(domain_size_multiplier,basket):
@@ -506,6 +551,7 @@ def essentials(chunk,variables):
 
     #annexes all the genes which fit the criteria of essentiality
     for key in chunk:
+
         chunk[key].significant = {} #clears any overlapping dicitonaries
         insertions = chunk[key].domain_insertions_total #total number of insertions in gene
         domains = chunk[key].domains[:-1]
@@ -628,10 +674,10 @@ def pvaluing(names,pvalues_list,pvaluing_array,pvalue,variables,baseline_essenti
     rejected_baseline_nonessentials = set()
 
     fdr = statsmodels.stats.multitest.multipletests(pvalues_list, pvalue, "fdr_bh") #multitest correction, fdr_bh
-    
+
     for i,(name,entry) in enumerate(zip(names,pvaluing_array)):
         remove_signal,pvaluing_array=pvaluing_jit(pvaluing_array,fdr[0],fdr[-1],i)
-        
+
         if remove_signal==1:
             if (name in baseline_essentials) & (len(baseline_essentials) >= 30):
                 baseline_essentials.remove(name)      
@@ -760,6 +806,7 @@ def insertion_annotater(chunk,variables):
     he function returns the annotated chunk. '''
     
     for key in chunk:
+
         chunk[key].subdomain_insert_orient_neg,chunk[key].subdomain_insert_orient_plus = {},{} #clear past values
         subdomain_insertions,subdomain_insert_seq = {}, {}
         
@@ -841,7 +888,6 @@ def multi_annotater(basket):
 
     pool.close()
     pool.join()
-
     result = [result.get() for result in result_objs]
     #demultiplexing the results
     for subresult in result:
@@ -944,25 +990,20 @@ def multi_pvalue_iter(basket):
     and their properties, converts them to Numpy arrays, and returns the 
     resulting lists of p-value thresholds and corresponding true/false positive rates.  '''
     
-    pvalue=variables.pvalue
+    pvalue=[variables.pvalue * 0.5 ** i for i in range(200)] #change here to increase resolution of iteration
+    pool, cpus = cpu()
     result_objs,pvalue_listing,euclidean_points = [],[],[]
-    iterator = 1
-    
+
     baseline_essentials_master,baseline_non_essentials_master,pvaluing_array,names,pvalues_list=class_to_numba(basket)
 
-    while iterator > 0:
-        pool, cpus = cpu()
-        subdivided = [pvalue * 0.8 ** i for i in range(cpus)]
-            
-        for p in subdivided:
-            result = pool.apply_async(pvalue_iteration, args=((names,pvalues_list,pvaluing_array,p,pvalue_listing,euclidean_points,variables,baseline_essentials_master,baseline_non_essentials_master)))
-            result_objs.append(result)
-            
-        pool.close()
-        pool.join()
+    for p in pvalue:
+        result = pool.apply_async(pvalue_iteration, args=((names,pvalues_list,pvaluing_array,p,pvalue_listing,euclidean_points,variables,baseline_essentials_master,baseline_non_essentials_master)))
+        result_objs.append(result)
         
-        result = [result.get() for result in result_objs]
-        iterator = round(sum(result[-1][-1][-1]), 1)
+    pool.close()
+    pool.join()
+    
+    result = [result.get() for result in result_objs]
         
     result = sorted(result, key=lambda e: e[0][0], reverse=True)
     pvalue_listing, euclidean_points = zip(*result)
@@ -1059,13 +1100,14 @@ def final_compiler(optimal_basket,pvalue,euclidean_points):
     genes_list.insert(0, ["#Number of whole genes that are essential: %s" % len(significant_genes_list)]) 
                                       
     output_writer(variables.directory, variables.output_name, genes_list)                                  
-
+    x,y = zip(*euclidean_points[0])
+  
     fig, ax1 = plt.subplots()   
     plt.xlim(0, 1)
     plt.ylim(0, 1)
     ax1.set_xlabel("True Negative Rate") #1 - specificity
     ax1.set_ylabel("True Positive Rate") #(sensitivity)
-    ax1.plot(*zip(*euclidean_points), color = "midnightblue")      
+    ax1.plot(x,y, color = "midnightblue")      
     ax1.plot(ax1.get_xlim(), ax1.get_ylim(), ls="--", c=".3")
     ax1.tick_params(axis='y')
     ax1.set_title("Reciver Operator Curve (ROC)\nused to auto-determine the essentiality calling threshold for %s" % variables.strain, size = 9, pad = 13)
@@ -1158,11 +1200,11 @@ def domain_iterator(basket):
 
         return pvalue, best_distance, np.array(euclidean_points)
     
-    def iterating(i,iterator_store,euclidean_distances,basket):
+    def iterating(i,iterator_store,euclidean_distances,basket,current_gap):
         basket=domain_resizer(variables.domain_iteration[i],basket)
         basket = multi_annotater(basket)
         best_pvalue, best_distance, euclidean_points = ROC(basket)
-        iterator_store.append([variables.domain_iteration[i]] + [best_pvalue] + [best_distance]+ [i] + [euclidean_points])
+        iterator_store.append([current_gap] + [best_pvalue] + [best_distance]+ [i] + [euclidean_points])
         return iterator_store
     
     biggest_gene=0
@@ -1178,14 +1220,14 @@ def domain_iterator(basket):
     while (i<len(variables.domain_iteration)) and (current_gap<=biggest_gene): 
         current_gap = int(variables.genome_length / variables.total_insertions * variables.domain_iteration[i])
         print(f"Current domain division size iteration: {current_gap}bp")
-        iterator_store = iterating(i,iterator_store,euclidean_distances,basket)
+        iterator_store = iterating(i,iterator_store,euclidean_distances,basket,current_gap)
         i += 1
         
     sorted_optimal=sorted(iterator_store, key=lambda e:e[2]) #sort by best eucledian distance
     variables.best_domain_size = sorted_optimal[0][0]
-    print(f"Optimal domain division size: {int(variables.genome_length / variables.total_insertions * variables.best_domain_size)}bp")
+    print(f"Optimal domain division size: {variables.best_domain_size}bp")
     fig, ax1 = plt.subplots()  
-         
+
     plt.xlim(0, 1)
     plt.ylim(0, 1)
         
@@ -1194,7 +1236,8 @@ def domain_iterator(basket):
     
     legenda = [n[0] for n in iterator_store]
     for i in iterator_store:
-        ax1.plot(*zip(*i[4]))
+        z,x = zip(*i[4][0])
+        ax1.plot(z,x)
             
     ax1.plot(ax1.get_xlim(), ax1.get_ylim(), ls="--", c=".3")
     ax1.tick_params(axis='y')
@@ -1204,7 +1247,7 @@ def domain_iterator(basket):
     plt.savefig(os.path.join(variables.directory, "ROC_curves_iterator_%s.png" % variables.strain), dpi=300)
     
     best_index = int(sorted_optimal[0][3])
-    output_writer(variables.directory, "Best_ROC_points{}".format(variables.output_name), iterator_store[best_index][4])
+    output_writer(variables.directory, "Best_ROC_points{}".format(variables.output_name), iterator_store[best_index][4][0])
     basket=domain_resizer(variables.domain_iteration[best_index],basket)
     basket=multi_annotater(basket)
     
