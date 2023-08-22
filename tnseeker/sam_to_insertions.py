@@ -164,14 +164,20 @@ def extractor(name_folder, folder_path, pathing, paired_ended,barcode,\
     def barcode_finder():
         read = ""
         barcode = {}
+        bar=None
         with open(f"{folder_path}/barcodes_1.txt") as current:
             for line in current:
                 if "@" not in line:
                     if len(line[:-1]) != 0:
                         bar = line[:-1]
-                else:
+                    else:
+                        bar = None
+                        
+                if (bar is not None) & ("@" in line):
                     read = line[:-1].split(" ")[0][1:]
                     barcode[read] = bar
+                    bar = None
+
         return barcode
 
     genome_size, aligned_reads, aligned_valid_reads = 0, 0, 0
