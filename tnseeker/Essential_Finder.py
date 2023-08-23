@@ -12,6 +12,7 @@ import matplotlib.pyplot as plt
 import sys
 import datetime
 from numba import njit
+import pkg_resources
 
 #associates a Tn5 insertion position with a gene (unique insertions and upstream/down regions) usgin a gff file as the annotation file and the pangenome as the gene name file, 
 #giving also genes without any insertion and returning essential genes for a given pvalue
@@ -34,11 +35,8 @@ def inputs(argv):
     variables.ir_size_cutoff = int(argv[7])
     variables.output_name = variables.strain + "_alldomains"
     
-    import tnseeker.extras
-    dir_reference_set = os.path.dirname(tnseeker.extras.__file__)
-    
-    variables.true_positives = dir_reference_set + "/Truepositivs.csv"
-    variables.true_negatives = dir_reference_set + "/Truenegativs.csv"
+    variables.true_positives = pkg_resources.resource_filename(__name__, 'data/Truepositivs.csv')
+    variables.true_negatives = pkg_resources.resource_filename(__name__, 'data/Truenegativs.csv')
 
 def path_finder():
     
