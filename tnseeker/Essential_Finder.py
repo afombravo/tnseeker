@@ -33,8 +33,12 @@ def inputs(argv):
     variables.pvalue = float(argv[6])
     variables.ir_size_cutoff = int(argv[7])
     variables.output_name = variables.strain + "_alldomains"
-    variables.true_positives = variables.annotation_folder + "/Truepositivs.csv"
-    variables.true_negatives = variables.annotation_folder + "/Truenegativs.csv"
+    
+    import tnseeker.extras
+    dir_reference_set = os.path.dirname(tnseeker.extras.__file__)
+    
+    variables.true_positives = dir_reference_set + "/Truepositivs.csv"
+    variables.true_negatives = dir_reference_set + "/Truenegativs.csv"
 
 def path_finder():
     
