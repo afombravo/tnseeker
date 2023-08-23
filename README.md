@@ -1,15 +1,9 @@
 # Tnseeker
-Tnseeker is a comprehensive pipeline designed for transposon insertion sequencing (Tn-Seq) analysis. It can perform multiple tasks, including read trimming, alignment, and essential gene inference. Tnseeker sets itself apart with its ability to automatically infer and adjust threshold/cutoff defining parameters, eliminating the need for advanced user input, and thus enabling a more accurante inference of essentiality from the available data. Tnseeker is compatible with any transposon disruption experiment, as it effectively corrects any transposon specific biases (i.e. different insertion sequences and hotspots).
+Tnseeker is an advanced pipeline tailored for transposon insertion sequencing (Tn-Seq) analysis. It performs an array of tasks: from read trimming and alignment to associating genomic locations with transposon insertions and inferring essential genes based on transposon insertion densities. Additionally, Tnseeker is adept at extracting barcodes from raw fastq files and linking them to corresponding transposon genomic locations for subsequent analysis. What truly distinguishes Tnseeker from other tools is its unique capability to automatically infer and adjust threshold/cutoff parameters. This negates the need for intricate user input, allowing for a more precise determination of gene essentiality based on the data. Compatible with any transposon disruption experiment, Tnseeker efficiently mitigates transposon-specific biases, including those seen with HIMAR. Hence, Tnseeker is versatile enough to handle all Tn-Seq datasets.
+Tnseeker is under active developement and is available as is. Contact me if you are interested in using the program or have any questions. Bugs can be expected. Please report any weird or unintented behaviour. 
 
-Tnseeker is under active developement and is available as is. Contact me if you are interested in using the program or have any questions.
-
-## Installation
-Tnseeker currently exist as a yet unpublished PyPI module. You can, however, download the installation wheel from the current repository ('tnseeker-1.0.0.tar.gz') and install it in a Linux environment by typing: 
-
-`pip install "/your/tnseeker/directory/tnseeker-1.0.0.tar.gz" `
- 
 ## Requirements
-The tnseeker pipeline requires both Python3 and Bowtie2 to be callable from the terminal. 
+The tnseeker pipeline requires both Python3 and Bowtie2 to be callable from the terminal (and added to path). 
 
 ## Executing 
 tnseeker is executable from the command line by typing:
@@ -18,78 +12,91 @@ tnseeker is executable from the command line by typing:
 
 An example use case is the folowing. See below the meaning of the input arguments:
 
-`python -m tnseeker -s BW25113 -sd '/your/data/directory/folder_with_fastq.gz_files' -ad /your/annotations/directory/ -at gb -st SE --tn AGATGTGTATAAGAGACAG --ph 10 --mq 40 --b`
+`python -m tnseeker -s BW25113 -sd '/your/data/directory/folder_with_fastq.gz_files' -ad /your/annotations/directory/ -at gb -st SE --tn AGATGTGTATAAGAGACAG --ph 10 --mq 40`
 
 ## Optional Arguments:
 
   -h, --help   show this help message and exit
-  
-  -s S         Strain name. Must match the annotation (FASTA/GFF/GB) file
+
+  -s S         Strain name. Must match the annotation (FASTA/GB) file
                names
-               
-  -sd SD       The full path to the sequencing file(s) folder
-  
-  --sd_2 SD_2  The full path to the pair ended sequencing file (if available)
-  
-  -ad AD       The full path to the directory with the annotation
-               (FASTA/GFF/GB) files
-               
-  -at AT       Annotation Type (Genbank/gff)
-  
+
+  -sd SD       The full path to the sequencing files FOLDER
+
+  --sd_2 SD_2  The full path to the pair ended sequencing files FOLDER (needs
+               to be different from the first folder)
+
+  -ad AD       The full path to the directory with the .gb and .fasta files
+
+  -at AT       Annotation Type (Genbank)
+
   -st ST       Sequencing type (Paired-ended (PE)/Single-ended(SE)
-  
-  --tn [TN]    Transposon border sequence (Himar: 'ACTTATCAGCCAACCTGT'; tn5:
-               'GATGTGTATAAGAGACAG'). Required for triming and proper mapping
-               
+
+  --tn [TN]    Transposon border sequence (tn5: GATGTGTATAAGAGACAG). Required for triming and proper mapping
+
+  --m [M]      Mismatches in the transposon border sequence (default is 0)
+
   --k [K]      Remove intermediate files. Default is yes, remove.
-  
+
   --e [E]      Run only the essential determing script. required the
                all_insertions_STRAIN.csv file to have been generated first.
-               
-  --t [T]      Run without searching for a transposon sequence, and triming
-               the .fastq file
-               
+
+  --t [T]      Trims to the indicated nucleotides length AFTER finding the
+               transposon sequence. For example, 100 would mean to keep the
+               100bp after the transposon (this trimmed read will be used for
+               alignement after)
+
   --b [B]      Run with barcode extraction
-  
+
+  --b1 [B1]    upstream barcode sequence (example: ATC)
+
+  --b2 [B2]    downstream barcode sequence (example: CTA)
+
+  --b1m [B1M]  upstream barcode sequence mismatches
+
+  --b2m [B2M]  downstream barcode sequence mismatches
+
+  --b1p [B1P]  upstream barcode sequence Phred-score filtering. Default is no
+               filtering
+
+  --b2p [B2P]  downstream barcode sequence Phred-score filtering. Default is
+               no filtering
   --rt [RT]    Read threshold number
-  
+
   --ne [NE]    Run without essential Finding
-  
+
   --ph [PH]    Phred Score (removes reads where nucleotides have lower phred
                scores)
-               
+
   --mq [MQ]    Bowtie2 MAPQ threshold
-  
+
+  --ig [IG]    The number of bp up and down stream of any gene to be
+               considered an intergenic region
+
   --pv [PV]    Essential Finder pvalue threshold for essentiality
                determination
-               
+
   --sl5 [SL5]  5' gene trimming percent for essentiality determination (number
                between 0 and 1)
-               
+
   --sl3 [SL3]  3' gene trimming percent for essentiality determination (number
                between 0 and 1)
                
 ## Dependencies
 
 tnseeker requires several dependencies, all instalable via `pip` commands.
-A notable exception is the poibin module, which is available in the current tnseeker folder, and can be originally be found here: https://github.com/tsakim/poibin
-
-## Requirements for working function
-
-tnseeker is an actively under-developement multi-step-sequencing analysis and processing program. Bugs, particularly at loading data from gff formats, can be expected. Troubleshooting on this end can be made easier by looking at the gene_info_parser_gff() function in the 'Essential_finder.py' script.
+A notable exception is the poibin module, which is available in the current tnseeker folder (you as the user don't need to do anything else), and can be originally be found here: https://github.com/tsakim/poibin
 
 ### File requirements
 
 tnseeker requires several input files:
 
- 1. A '.fastq.gz' file
+ 1. A '.fastq.gz' file (needs to be .gz)
  
- 2. An annotation file, either genbank (.gb) or .gff.
+ 2. An annotation file in genbank format (.gb)
  
- 3. A FASTA file with the genome under analysis.
+ 3. A FASTA file with the genome under analysis (needs to be .fasta).
 
-1. exists as a single file;
-2. and 3. need to be in the same folder;
 
 ### Working modes
 
@@ -98,11 +105,3 @@ tnseeker is composed of 2 submodules:
 1. the initial sequencing processing: Handles the read trimming and alignment, creating a compiled .csv with all found transposon insertions.
 
 2. The Essential_finder: Infers gene essentiality from the insertion information found in the previous .csv file. tnseeker can thus be run on a standalone mode if the appropriate .csv and annotation files are indicated. 
-
-If you already have an appropriatly format transposon insertion .csv file, and just want to infer gene essentiality, its possible to execute the standalone Essential_Finder.py script as follows (OS inclusive):
-
-`python "/your/script/directory/Essential_Finder.py" '/your/data/directory/with/fastqfiles' strain_name annotation_type(gb/gff) '/your/annotations/directory/'`
-
-
-
-
