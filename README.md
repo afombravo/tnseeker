@@ -1,11 +1,16 @@
 # Tnseeker
 Tnseeker is an advanced pipeline tailored for transposon insertion sequencing (Tn-Seq) analysis. It performs an array of tasks: from read trimming and alignment to associating genomic locations with transposon insertions and inferring essential genes based on transposon insertion densities. Additionally, Tnseeker is adept at extracting barcodes from raw fastq files and linking them to corresponding transposon genomic locations for subsequent analysis. What truly distinguishes Tnseeker from other tools is its unique capability to automatically infer and adjust threshold/cutoff parameters. This negates the need for intricate user input, allowing for a more precise determination of gene essentiality based on the data. Compatible with any transposon disruption experiment, Tnseeker efficiently mitigates transposon-specific biases, including those seen with HIMAR. Hence, Tnseeker is versatile enough to handle all Tn-Seq datasets.
+
 Tnseeker is under active developement and is available as is. Contact me if you are interested in using the program or have any questions. Bugs can be expected. Please report any weird or unintented behaviour. 
 
 ## Requirements
 The tnseeker pipeline requires both Python3 and Bowtie2 to be callable from the terminal (and added to path). 
 
 ## Executing 
+tnseeker can be installed as PyPI module with the folowing:
+
+`pip install tnseeker`
+
 tnseeker is executable from the command line by typing:
 
 `python -m tnseeker`
