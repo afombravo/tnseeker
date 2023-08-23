@@ -268,7 +268,7 @@ def extractor(name_folder, folder_path, pathing, paired_ended,barcode,\
     insertion_count = inter_gene_annotater(gb_file,insertion_count,genome_size,ir_size_cutoff)
     
     if barcode:
-        insert_parser(insertion_count,name_folder, folder_path,redundancy_barcode)
+        insert_parser(insertion_count,name_folder,folder_path)
         
     dictionary_parser(insertion_count,barcode,folder_path,name_folder)
         
@@ -297,7 +297,7 @@ def dict_filter(dictionary,read_cut,redundancy_barcode,barcode):
                         del redundancy_barcode[key1]
     return dictionary,redundancy_barcode
 
-def insert_parser(insertion_count,name_folder, folder_path,redundancy_barcode):    
+def insert_parser(insertion_count,name_folder,folder_path):    
     insertions,barcoded_insertions = [],[]
     for key in insertion_count: 
         insertion_count[key].mapQ = insertion_count[key].mapQ / insertion_count[key].count
@@ -314,15 +314,11 @@ def insert_parser(insertion_count,name_folder, folder_path,redundancy_barcode):
         
         barcodes,reads = '',0
         for bar,read in insertion_count[key].barcode.items():
-            unique = 0
-            key1 = (contig[0], local[0], orientation[0], bar)
-            if redundancy_barcode[key1]:
-                unique = 1
-            barcodes += f'{bar}:{read}:{unique};'
+            barcodes += f'{bar}:{read};'
             reads += read
             
             ## for individual barcoded insertions
-            barcoded_insertions.append([bar] + [read] + [unique] + contig + local +\
+            barcoded_insertions.append([bar] + [read] + contig + local +\
                                        orientation + count + mapq + gene_name + \
                                        gene_product + gene_orientation + relative_gene_pos)
             
@@ -333,7 +329,7 @@ def insert_parser(insertion_count,name_folder, folder_path,redundancy_barcode):
     insertions.insert(0, ["#Contig"] + ["position"] + ["Orientation"] + ["Total Reads"] + \
                       ["Average MapQ"] + ["Gene Name"] + ["Gene Product"] + ["Gene Orientation"] + \
                       ["Relative Position in Gene (0-1)"] + ["Number of different barcodes in coordinate"] + \
-                      ["Total barcode Reads"] + ["Barcodes (barcode:read:unique)"])
+                      ["Total barcode Reads"] + ["Barcodes (barcode:read)"])
     
     name = f"barcoded_insertions_{name_folder}.csv"
     output_file_path = os.path.join(folder_path, name)
@@ -343,7 +339,7 @@ def insert_parser(insertion_count,name_folder, folder_path,redundancy_barcode):
     
     ############
     
-    barcoded_insertions.insert(0, ["#Barcode"] + ["Barcode Reads"] + ["Barcode Unique in File"] +\
+    barcoded_insertions.insert(0, ["#Barcode"] + ["Barcode Reads"] +\
                                ["Contig"] + ["position"] + ["Orientation"] + ["Total Reads in position"] + \
                               ["Average MapQ"] + ["Gene Name"] + ["Gene Product"] + ["Gene Orientation"] + \
                               ["Relative Position in Gene (0-1)"])

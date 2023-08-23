@@ -229,12 +229,7 @@ def gene_info_parser_genbank(file):
                 
             except KeyError:
                 identity = None
- 
-            if orientation == 1:
-                orientation = "+"
-            else:
-                orientation = "-"
-            
+
             try:
                 if 'product' in feature.qualifiers:
                     product = feature.qualifiers['product'][0]

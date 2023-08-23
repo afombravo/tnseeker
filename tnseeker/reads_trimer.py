@@ -171,11 +171,12 @@ def extractor(fastq,folder_path,sequences,barcode,barcode_upstream,barcode_downs
                             subdivied.append(read_bucket[z:spliter_mid])
                             z += divider
                             spliter_mid += divider
-                            
+
                         for read in subdivied:
                             if not barcode:
                                 result=pool.apply_async(read_trimer, 
-                                                        args=((read,transposon_seq,quality_set,mismatches,trimming_len,miss_up,miss_down)))
+                                                        args=((read,transposon_seq,quality_set,mismatches,trimming_len,miss_up,miss_down,\
+                                                               quality_set_bar_up,quality_set_bar_down)))
                             else:
                                 result=pool.apply_async(read_trimer, 
                                                         args=((read,transposon_seq,quality_set,mismatches,trimming_len,miss_up,miss_down,\
@@ -218,16 +219,19 @@ def extractor(fastq,folder_path,sequences,barcode,barcode_upstream,barcode_downs
 def paired_ended_rearrange(fastq2,folder_path):
     names=set()
     duplicated=set()
+    reading = []
     with open(folder_path+"/processed_reads_1.fastq") as current:
         for line in current:
-            if "@" in line:
-                title = line.split(" ")[0]
+            reading.append(line[:-1])
+            if len(reading) == 4: 
+                title = reading[0].split(" ")[0]
                 title = title.split(":")
                 title = title[3]+title[4]+title[5]+title[6]
                 if title not in names:
                     names.add(title)
                 else:
                     duplicated.add(title)
+                reading=[]
     
     reading,read_bucket=[],[]
     for file in fastq2:
@@ -249,11 +253,11 @@ def paired_ended_rearrange(fastq2,folder_path):
                         reading[3]=str(reading[3],"utf-8")
                         read_bucket.append(reading)
                         if len(read_bucket)>1000000:
-                            write(read_bucket, "/processed_reads_2.fastq", folder_path,False)
+                            write(read_bucket, "/processed_reads_2.fastq", folder_path)
                             read_bucket=[]
                     reading=[]
                         
-    write(read_bucket, "/processed_reads_2.fastq", folder_path,False)
+    write(read_bucket, "/processed_reads_2.fastq", folder_path)
    
 def folder_sequence_parser(folder):
     pathing = []

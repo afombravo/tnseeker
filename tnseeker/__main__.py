@@ -233,13 +233,13 @@ def subprocess_cmd(command):
 def input_parser(variables):
     
     parser = argparse.ArgumentParser()
-    parser.add_argument("-s",help="Strain name. Must match the annotation (FASTA/GFF/GB) file names")
+    parser.add_argument("-s",help="Strain name. Must match the annotation (FASTA/GB) file names")
     parser.add_argument("-sd",help="The full path to the sequencing files FOLDER")
     parser.add_argument("--sd_2",help="The full path to the pair ended sequencing files FOLDER (needs to be different from the first folder)")
-    parser.add_argument("-ad",help="The full path to the directory with the annotation (FASTA/GFF/GB) files")
-    parser.add_argument("-at",help="Annotation Type (Genbank/gff)")
+    parser.add_argument("-ad",help="The full path to the directory with the annotation (FASTA/GB) files")
+    parser.add_argument("-at",help="Annotation Type (Genbank)")
     parser.add_argument("-st",help="Sequencing type (Paired-ended (PE)/Single-ended(SE)")
-    parser.add_argument("--tn",nargs='?',const=None,help="Transposon border sequence (Himar: 'ACTTATCAGCCAACCTGT'; tn5: 'GATGTGTATAAGAGACAG'). Required for triming and proper mapping")
+    parser.add_argument("--tn",nargs='?',const=None,help="Transposon border sequence (tn5: GATGTGTATAAGAGACAG). Required for triming and proper mapping")
     parser.add_argument("--m",nargs='?',const=None,help="Mismatches in the transposon border sequence (default is 0)")
     parser.add_argument("--k",nargs='?',const=False,help="Remove intermediate files. Default is yes, remove.")
     parser.add_argument("--e",nargs='?',const=False,help="Run only the essential determing script. required the all_insertions_STRAIN.csv file to have been generated first.")
