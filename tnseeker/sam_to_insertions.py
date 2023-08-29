@@ -248,11 +248,11 @@ def extractor(name_folder, folder_path, pathing, paired_ended,barcode,\
                                 else:
                                     insertion_count[key].barcode[bar] = 1
                                     
-                            key = (contig, local, orientation, bar)
-                            if key in redundancy_barcode:
-                                redundancy_barcode[key] = False
-                            else:
-                                redundancy_barcode[key] = True
+                                key = (contig, local, orientation, bar)
+                                if key in redundancy_barcode:
+                                    redundancy_barcode[key] = False
+                                else:
+                                    redundancy_barcode[key] = True
                                     
                 elif sam[0][0] == "@": #returns the genome size
                     sam = line.split('\t')
