@@ -134,7 +134,7 @@ def extractor(fastq,folder_path,sequences,barcode,barcode_upstream,barcode_downs
     reading = []
     read_bucket=[]
     pool, cpus = cpu()
-    divider = 25000
+    divider = 250000
     count_total=0
     count_trimed=0
     quality_list = '!"#$%&' + "'()*+,-/0123456789:;<=>?@ABCDEFGHI" #Phred score
@@ -305,4 +305,6 @@ if __name__ == "__main__":
         if argv[4] == "True":
             argv.append(sys.argv[-6],sys.argv[-5],sys.argv[-4])
     main(argv)
+    
+    multiprocessing.set_start_method("spawn")
 

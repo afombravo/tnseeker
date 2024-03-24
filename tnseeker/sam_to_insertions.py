@@ -54,12 +54,12 @@ def main(argv):
     read_cut = int(argv[4]) if read_threshold else 0
     barcode = argv[5] == "True"
     map_quality_threshold = int(argv[6])
-    gb_file = argv[7]
+    annotation_file = argv[7]
     ir_size_cutoff = int(argv[8])
-
+    
     pathing = path_finder(folder_path)
     extractor(name_folder, folder_path, pathing, paired_ended,barcode,\
-              read_threshold,read_cut,gb_file,ir_size_cutoff,map_quality_threshold)
+              read_threshold,read_cut,annotation_file,ir_size_cutoff,map_quality_threshold)
 
 def path_finder(folder_path): 
     filenames = []
@@ -159,7 +159,7 @@ def read_count(dictionary):
     return count
 
 def extractor(name_folder, folder_path, pathing, paired_ended,barcode,\
-              read_threshold,read_cut,gb_file,ir_size_cutoff,map_quality_threshold = 42):
+              read_threshold,read_cut,annotation_file,ir_size_cutoff,map_quality_threshold = 42):
     
     def barcode_finder():
         read = ""
@@ -180,7 +180,7 @@ def extractor(name_folder, folder_path, pathing, paired_ended,barcode,\
 
         return barcode
 
-    genome_size, aligned_reads, aligned_valid_reads = 0, 0, 0
+    aligned_reads, aligned_valid_reads = 0, 0
     insertion_count = {}
     
     flag_list = [0, 16]
@@ -226,7 +226,7 @@ def extractor(name_folder, folder_path, pathing, paired_ended,barcode,\
                                     clipped=int(match[0])
                                     break #only consideres the first one at the start
 
-                            local=str(int(local)+len(sequence)-clipped) #t
+                            local=str(int(local)+len(sequence)-clipped)
 
                         key = (contig, local, orientation)
                         if key not in insertion_count: 
@@ -253,19 +253,17 @@ def extractor(name_folder, folder_path, pathing, paired_ended,barcode,\
                                     redundancy_barcode[key] = False
                                 else:
                                     redundancy_barcode[key] = True
-                                    
-                elif sam[0][0] == "@": #returns the genome size
-                    sam = line.split('\t')
-                    if "LN" in sam[-1]:
-                        bp_pos = sam[-1].find(":") + 1
-                        bp = int(sam[-1][bp_pos:-1])
-                        genome_size = genome_size + bp
 
     if read_threshold:
         insertion_count,redundancy_barcode=dict_filter(insertion_count,read_cut,redundancy_barcode,barcode)
+    
+    if (annotation_file.endswith(".gb")) or (annotation_file.endswith(".gbk")):
+        insertion_count = gene_parser_genbank(annotation_file,insertion_count)
         
-    insertion_count = gene_parser_genbank(gb_file,insertion_count)
-    insertion_count = inter_gene_annotater(gb_file,insertion_count,genome_size,ir_size_cutoff)
+    elif annotation_file.endswith(".gff"):
+        insertion_count = gene_parser_gff(annotation_file,insertion_count)
+        
+    insertion_count = inter_gene_annotater(annotation_file,insertion_count,ir_size_cutoff)
     
     if barcode:
         insert_parser(insertion_count,name_folder,folder_path)
@@ -350,70 +348,116 @@ def insert_parser(insertion_count,name_folder,folder_path):
         writer = csv.writer(output)
         writer.writerows(barcoded_insertions)
 
-def inter_gene_annotater(gb_file,insertion_count,genome_size,ir_size_cutoff):
+def inter_gene_annotater(annotation_file,insertion_count,ir_size_cutoff):
+    
+    contigs = {}
     genes = []
-    for rec in SeqIO.parse(gb_file, "gb"):
-        for feature in rec.features:
-            if feature.type != 'source':
-                start = feature.location.start.position+1
-                end = feature.location.end.position-1
-                orientation = feature.location.strand
-                if orientation == -1:
-                    orientation = '-'
-                else:
-                    orientation = '+'
-                try:
-                    identity = feature.qualifiers['locus_tag'][0]
-                except KeyError:
-                    identity = 'Undefined'
-                    
-                for key, val in feature.qualifiers.items():   
-                    if "pseudogene" in key:
-                        gene = identity
-                        break 
-                    elif "gene" in key:
-                        gene = feature.qualifiers['gene'][0]
-                        break 
+    if annotation_file.endswith(".gff"):
+        with open(annotation_file) as current:
+            for line in current:
+                GB = line.split('\t') #len(GB)
+                if "#" not in GB[0][:3]: #ignores headers
+
+                    start = int(GB[3])
+                    end = int(GB[4])
+
+                    features = GB[8].split(";") #gene annotation file
+                    feature = {}
+                    for entry in features:
+                        entry = entry.split("=")
+                        feature[entry[0]] = entry[1].replace("\n","")
+                    if "gene" in feature:
+                        gene=feature["gene"]
+                    if "Name" in feature:
+                        gene=feature["Name"]
                     else:
-                        gene = identity
+                        gene=feature["ID"]
+
+                    contig = GB[0]
+                    orientation = GB[6] #orientation of the gene
+                    
+                    key = (start,end,orientation,gene,contig)
+                    genes.append((start,end,orientation,gene,contig))
+                else:
+                    if "sequence-region" in GB[0]:
+                        GB = GB[0].split(" ")
+                        contigs[GB[-3]] = int(GB[-1][:-1])
+                
+                if "##FASTA" in GB[0]:
+                    break
+    else:
+        for rec in SeqIO.parse(annotation_file, "gb"):
+            for feature in rec.features:
+                if feature.type != 'source':
+                    start = feature.location.start
+                    end = feature.location.end
+                    orientation = feature.location.strand
+                    if orientation == -1:
+                        orientation = '-'
+                    else:
+                        orientation = '+'
+                    try:
+                        identity = feature.qualifiers['locus_tag'][0]
+                    except KeyError:
+                        identity = 'Undefined'
                         
-                key = (start,end,orientation,gene)
-                genes.append((start,end,orientation,gene))
+                    for key, val in feature.qualifiers.items():   
+                        if "pseudogene" in key:
+                            gene = identity
+                            break 
+                        elif "gene" in key:
+                            gene = feature.qualifiers['gene'][0]
+                            break 
+                        else:
+                            gene = identity
+                            
+                    key = (start,end,orientation,gene,rec.id)
+                    genes.append((start,end,orientation,gene,rec.id))
+            contigs[rec.id] = len(rec.seq)
     
     genes = list(dict.fromkeys(genes))
+    genes.sort(key=lambda x: (x[-1], x[0])) #sort by start position of the gene and contig
     
     ir_annotation = {}
     count = 0
     for i,gene in enumerate(genes[:-1]):
-        gene_down_start_border = ir_size_cutoff + gene[1]
-        gene_up_start_border = genes[i+1][0] - ir_size_cutoff
-        domain_size = gene_up_start_border - gene_down_start_border
-        if domain_size >= 1:
-            count += 1
-            ir_annotation[f'IR_{count}_{gene[3]}_{gene[2]}_UNTIL_{genes[i+1][3]}_{gene[2]}'] = (gene[1],genes[i+1][0],domain_size)
-            
-    circle_closer = genes[-1][1] + ir_size_cutoff 
-    domain_size = genome_size - circle_closer
-    if domain_size >= 1:
-        count += 1
-        ir_annotation[f'IR_{count}_{genes[-1][3]}_{gene[2]}_genome-end'] = (genes[-1][1],genome_size,domain_size)
-    
-    domain_size = genes[0][0] - ir_size_cutoff
-    if domain_size  >= 1:
-        count += 1
-        ir_annotation[f'IR_{count}_genome-start_{genes[0][3]}_{gene[2]}'] = (0,genes[0][0],domain_size)
-    
+        contig = gene[-1]
+        if contig == genes[i+1][-1]: #same contigs
+            gene_down_start_border = ir_size_cutoff + gene[1]
+            gene_up_start_border = genes[i+1][0] - ir_size_cutoff
+            domain_size = gene_up_start_border - gene_down_start_border
+            if domain_size >= 1:
+                count += 1
+                ir_annotation[f'IR_{count}_{gene[3]}_{gene[2]}_UNTIL_{genes[i+1][3]}_{gene[2]}'] = (gene[1],genes[i+1][0],domain_size,contig)
+
+        if (contig != genes[i+1][-1]) or (i==0) or (i==len(genes)-2):
+
+            circle_closer = gene[1] + ir_size_cutoff 
+            domain_size = contigs[contig] - circle_closer
+            if domain_size >= 1:
+                count += 1
+                ir_name = f'IR_{count}_contig-start_{genes[0][3]}_{gene[2]}'
+                if ir_name not in ir_annotation:
+                    ir_annotation[ir_name] = (genes[-1][1],contigs[contig],domain_size,contig)
+
+            domain_size = genes[i+1][0] - ir_size_cutoff
+            if domain_size  >= 1:
+                count += 1
+                ir_name = f'IR_{count}_contig-start_{genes[0][3]}_{gene[2]}'
+                if ir_name not in ir_annotation:
+                   ir_annotation[ir_name] = (0,genes[0][0],domain_size,contig)
+
     for ir in ir_annotation:
         for key in insertion_count:
             if insertion_count[key].name is None:
-                if insertion_count[key].contig == rec.id:
+                if insertion_count[key].contig == ir_annotation[ir][3]:
                     if (int(insertion_count[key].local) >= ir_annotation[ir][0]) & (int(insertion_count[key].local) <= ir_annotation[ir][1]):
                         insertion_count[key].name = ir
                         insertion_count[key].relative_gene_pos = (int(insertion_count[key].local) - ir_annotation[ir][0]) / ir_annotation[ir][2]
 
     return insertion_count
 
-def gene_parser_genbank(gb_file,insertion_count):
+def gene_parser_genbank(annotation_file,insertion_count):
     
     ''' The gene_info_parser_genbank function takes a genbank file as input and 
     extracts gene information, storing it in a dictionary with Gene class 
@@ -421,11 +465,11 @@ def gene_parser_genbank(gb_file,insertion_count):
     retrieving attributes such as start, end, orientation, identity, 
     and product for each gene.''' 
     
-    for rec in SeqIO.parse(gb_file, "gb"):
+    for rec in SeqIO.parse(annotation_file, "gb"):
         for feature in rec.features:
             if feature.type != 'source':
-                start = feature.location.start.position
-                end = feature.location.end.position
+                start = feature.location.start
+                end = feature.location.end
                 domain_size = end - start
                 
                 orientation = feature.location.strand
@@ -463,6 +507,52 @@ def gene_parser_genbank(gb_file,insertion_count):
                         if (int(insertion_count[key].local) >= start) & (int(insertion_count[key].local) <= end):
                             insertion_count[key].name = gene
                             insertion_count[key].product = product
+                            insertion_count[key].gene_orient = orientation
+                            insertion_count[key].relative_gene_pos = (int(insertion_count[key].local) - start) / domain_size
+                      
+    return insertion_count
+
+def gene_parser_gff(annotation_file,insertion_count):
+    
+    with open(annotation_file) as current:
+        for line in current:
+            GB = line.split('\t') #len(GB)
+            
+            if "##FASTA" in GB[0]:
+                break
+            
+            if "#" not in GB[0][:3]: #ignores headers
+
+                start = int(GB[3])
+                end = int(GB[4])
+                domain_size = end - start
+                
+                features = GB[8].split(";") #gene annotation file
+                feature = {}
+                for entry in features:
+                    entry = entry.split("=")
+                    feature[entry[0]] = entry[1].replace("\n","")
+                if "gene" in feature:
+                    gene=feature["gene"]
+                if "Name" in feature:
+                    gene=feature["Name"]
+                else:
+                    gene=feature["ID"]
+                    
+                if 'product' not in feature:
+                    feature['product'] = None
+                    
+                if gene == ".":
+                    gene = f"{GB[2]}_{start}_{end}"
+                
+                contig = GB[0]
+                orientation = GB[6] #orientation of the gene
+                
+                for key in insertion_count:
+                    if insertion_count[key].contig == contig:
+                        if (int(insertion_count[key].local) >= start) & (int(insertion_count[key].local) <= end):
+                            insertion_count[key].name = gene
+                            insertion_count[key].product =  feature['product']
                             insertion_count[key].gene_orient = orientation
                             insertion_count[key].relative_gene_pos = (int(insertion_count[key].local) - start) / domain_size
                       
