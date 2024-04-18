@@ -5,7 +5,7 @@ Tnseeker is under active developement and is available as is. Contact me if you 
 
 ## Requirements
 The tnseeker pipeline requires Python3, Bowtie2, and BLAST, to be callable from the terminal (and added to path). 
-tnseeker requires several dependencies, all automatically instalable. A notable exception is the poibin module, which is available in the current tnseeker folder (you as the user don't need to do anything else), and can be originally be found here: https://github.com/tsakim/poibin
+Tnseeker also requires several python dependencies, all automatically installed. A notable exception is the poibin module, which is available in the current tnseeker folder (you as the user don't need to do anything), and can be originally be found here: https://github.com/tsakim/poibin
 
 ## Instalation
 `sudo apt update`
