@@ -5,6 +5,9 @@ from regex import findall
 from matplotlib import pyplot as plt
 import argparse
 from Bio import SeqIO
+import multiprocessing
+import pkg_resources
+import subprocess
 
 """ This script processes and analyzes sequencing data from a SAM (Sequence Alignment/Map) file. 
     The main purpose is to extract information about transposon insertions in a given genome 
@@ -124,7 +127,7 @@ class Insertion():
     
     def __init__(self, contig=None, local=None, border=None, orientation=None,\
                  count=None,barcode=None,name=None,product=None,gene_orient=None,
-                 relative_gene_pos=None,mapQ=0):
+                 relative_gene_pos=None,mapQ=0,read_id=None):
         
         self.contig = contig
         self.local = local
@@ -137,26 +140,20 @@ class Insertion():
         self.product = product
         self.gene_orient = gene_orient
         self.relative_gene_pos = relative_gene_pos
+        self.read_id = read_id
 
-def insertion_counter(current, contig, local, orientation, border):
+def cpu():
+    c = multiprocessing.cpu_count()
+    if c >= 2:
+        c -= 1
+    pool = multiprocessing.Pool(processes = c)
+    return pool, c
 
-    compiled_local = contig + local + orientation
-    
-    if compiled_local not in current: 
-        current[compiled_local] = Insertion(contig, local, orientation, border, 1)
-        
-    else: 
-        current[compiled_local].count += 1
-
-    return current
-
-def read_count(dictionary):
-    count = 0
-
-    for key in dictionary:
-        count += dictionary[key].count
-        
-    return count
+def subprocess_cmd(command):
+    try:
+        return subprocess.check_output(command)
+    except subprocess.CalledProcessError as e:
+        return e.output.decode()
 
 def extractor(name_folder, folder_path, pathing, paired_ended,barcode,\
               read_threshold,read_cut,annotation_file,ir_size_cutoff,map_quality_threshold = 42):
@@ -186,120 +183,174 @@ def extractor(name_folder, folder_path, pathing, paired_ended,barcode,\
     flag_list = [0, 16]
     if paired_ended=="PE":
         flag_list = [83, 99] #[16] for single ended data #99 and 83 means that the read is the first in pair (only paired ended reads are considered as valid)
-
-    if barcode:
-        redundancy_barcode = {}
-        read_to_barcode = barcode_finder()
     
-    for file in pathing:
-        with open(file) as current:
-            for line in current:
-                sam = line.split('\t')
-                if (sam[0][0] != "@") and (sam[2] != '*'): #ignores headers and unaligned contigs
-                    local = sam[3]
-                    sequence = sam[9] 
-                    contig = sam[2]
-                    flag = int(sam[1])
-                    cigar = sam[5]
-                    map_quality = float(sam[4])
-                    border, orientation = "",""
-                    aligned_reads += 1
-                    multi = "XS:i:" in sam #multiple alignemnts
+    file = pathing[0]
+    if barcode:
+        print("Linking barcodes to insertion positions")
+        file = f"{folder_path}/barcoded_align.sam"
+        subprocess_cmd([pkg_resources.resource_filename(__name__, 'data/barcode2sam.sh'),
+                       f"{folder_path}/alignment.sam",
+                       f"{folder_path}/barcodes_1.txt",
+                       file,
+                       folder_path])
+        
+    with open(file) as current:
+        for line in current:
+            sam = line.split('\t')
+            if (sam[0][0] != "@") and (sam[2] != '*'): #ignores headers and unaligned contigs
+                local = sam[3]
+                sequence = sam[9] 
+                contig = sam[2]
+                flag = int(sam[1])
+                cigar = sam[5]
+                map_quality = float(sam[4])
+                border, orientation = "",""
+                aligned_reads += 1
+                multi = "XS:i:" in sam #multiple alignemnts
+
+                if (flag in flag_list) & (multi==False) & (map_quality >= map_quality_threshold): #only returns aligned reads witht he proper flag score
                     
-                    if (flag in flag_list) & (multi==False) & (map_quality >= map_quality_threshold): #only returns aligned reads witht he proper flag score
-                        
-                        aligned_valid_reads += 1
-                        
-                        if flag == flag_list[0]: #first read in pair oriented 5'to 3' (positive)
-                            orientation = "+"
-                            border = sequence[:2] 
+                    aligned_valid_reads += 1
+                    
+                    if flag == flag_list[0]: #first read in pair oriented 5'to 3' (positive)
+                        orientation = "+"
+                        border = sequence[:2] 
+
+                    elif flag == flag_list[1]: #first read in pair oriented 3'to 5' (negative)
+                        orientation = "-"
+                        border = sequence[::-1][:2] #needs to be reversed to make sure the start position is always the same
+
+                        #for CIGAR
+                        matches = findall(r'(\d+)([A-Z]{1})', cigar)
+                        clipped = 0
+                        for match in matches:
+                            if match[1] == "S":
+                                clipped=int(match[0])
+                                break #only consideres the first one at the start
+
+                        local=str(int(local)+len(sequence)-clipped-1) # -1 to offsset bowtie alignement
+
+                    key = (contig, local, orientation)
+                    if key not in insertion_count: 
+                        insertion_count[key] = Insertion(contig=key[0], 
+                                                         local=key[1], 
+                                                         orientation=key[2], 
+                                                         count=1, 
+                                                         border=border,
+                                                         mapQ=map_quality)
+                    else: 
+                        insertion_count[key].count += 1
+                        insertion_count[key].mapQ += map_quality
+                    
+                    if barcode:
+                        bar = None
+                        if "BC:Z:" in sam[-1]:
+                            bar = sam[-1][:-1].split(":")[2]
+                        if bar != None:
+                            if bar in insertion_count[key].barcode:
+                                insertion_count[key].barcode[bar] += 1
+                            else:
+                                insertion_count[key].barcode[bar] = 1
+
+    for key in insertion_count:
+        insertion_count[key].mapQ = insertion_count[key].mapQ / insertion_count[key].count    
+
+    pool,cpus = cpu()
+    len_insertion_count_divider = int(len(insertion_count) / cpus)
+    batch_goals = {}
+    for i in range(cpus):
+        batch_goals[i] = set()
+        for j,key in enumerate(insertion_count):
+            if j >= len_insertion_count_divider * i:
+                if i != cpus-1:
+                    if len(batch_goals[i]) <= len_insertion_count_divider:
+                        batch_goals[i].add(key)
+                    else:
+                        break
+                else:
+                    batch_goals[i].add(key)
+
+    result_objs = []
+    for batch in batch_goals:
+
+        insertion_count_filtered = {}
+        for key in insertion_count:
+            if key in batch_goals[batch]:
+                insertion_count_filtered[key] = insertion_count[key]
+
+        result=pool.apply_async(annotation_processer, 
+                            args=((insertion_count_filtered, 
+                                   read_threshold,
+                                   read_cut,
+                                   barcode,
+                                   annotation_file,
+                                   ir_size_cutoff,
+                                   name_folder,
+                                   folder_path)))
     
-                        elif flag == flag_list[1]: #first read in pair oriented 3'to 5' (negative)
-                            orientation = "-"
-                            border = sequence[::-1][:2] #needs to be reversed to make sure the start position is always the same
-
-                            #for CIGAR
-                            matches = findall(r'(\d+)([A-Z]{1})', cigar)
-                            clipped = 0
-                            for match in matches:
-                                if match[1] == "S":
-                                    clipped=int(match[0])
-                                    break #only consideres the first one at the start
-
-                            local=str(int(local)+len(sequence)-clipped)
-
-                        key = (contig, local, orientation)
-                        if key not in insertion_count: 
-                            insertion_count[key] = Insertion(contig=key[0], 
-                                                             local=key[1], 
-                                                             orientation=key[2], 
-                                                             count=1, 
-                                                             border=border,
-                                                             mapQ=map_quality)
-                        else: 
-                            insertion_count[key].count += 1
-                            insertion_count[key].mapQ += map_quality
-
-                        if barcode:
-                            if sam[0] in read_to_barcode:
-                                bar = read_to_barcode[sam[0]]
-                                if bar in insertion_count[key].barcode:
-                                    insertion_count[key].barcode[bar] += 1
-                                else:
-                                    insertion_count[key].barcode[bar] = 1
-                                    
-                                key = (contig, local, orientation, bar)
-                                if key in redundancy_barcode:
-                                    redundancy_barcode[key] = False
-                                else:
-                                    redundancy_barcode[key] = True
-
-    if read_threshold:
-        insertion_count,redundancy_barcode=dict_filter(insertion_count,read_cut,redundancy_barcode,barcode)
-    
-    if (annotation_file.endswith(".gb")) or (annotation_file.endswith(".gbk")):
-        insertion_count = gene_parser_genbank(annotation_file,insertion_count)
+        result_objs.append(result)
+    pool.close()
+    pool.join()
         
-    elif annotation_file.endswith(".gff"):
-        insertion_count = gene_parser_gff(annotation_file,insertion_count)
-        
-    insertion_count = inter_gene_annotater(annotation_file,insertion_count,ir_size_cutoff)
+    result = [result.get() for result in result_objs]
     
+    final_compiler = {}
+    barcoded_insertions_final = []
+    insertions_final = []
+
+    for entry in result:
+        insertion,barcoded,insert = entry
+        final_compiler = {**final_compiler, **insertion}
+        if barcode:
+            for a,b in zip(barcoded,insert):
+                barcoded_insertions_final.append(a)
+                insertions_final.append(b)
+
     if barcode:
-        insert_parser(insertion_count,name_folder,folder_path)
+        annotate_barcodes_writer(barcoded_insertions_final,insertions_final,name_folder,folder_path)
         
-    dictionary_parser(insertion_count,barcode,folder_path,name_folder)
+    dictionary_parser(final_compiler,barcode,folder_path,name_folder)
         
     q = plotter(insertion_count, f"Unique insertions_{name_folder}", folder_path)
 
     reads = f"Total Aligned Reads: {aligned_reads}\nTotal Quality Passed Reads: {aligned_valid_reads}\nFiltered Vs. Raw Read % ratio: {round(aligned_valid_reads/aligned_reads*100,2)}%\n"
-    
     e = "Number of total unique insertions: {}\n".format(len(insertion_count))
-    count = read_count(insertion_count)
-    f = f"Total number of reads attributed to unique insertions: {count}\n"
-    print(reads,e,f)
-    
-    if barcode:
-        os.remove(f"{folder_path}/barcodes_1.txt")
-    
-    with open("{}/library_stats_{}.txt".format(folder_path,name_folder), "w+") as current:
-        current.write(reads+q+e+f)
+    print(reads,e)
 
-def dict_filter(dictionary,read_cut,redundancy_barcode,barcode):
+    with open("{}/library_stats_{}.txt".format(folder_path,name_folder), "w+") as current:
+        current.write(reads+q+e)
+
+def annotation_processer(insertion_count_filtered,read_threshold,read_cut,
+                         barcode,annotation_file,ir_size_cutoff,name_folder,folder_path):
+
+    if read_threshold:
+        insertion_count_filtered=dict_filter(insertion_count_filtered,read_cut,barcode)
+    
+    if (annotation_file.endswith(".gb")) or (annotation_file.endswith(".gbk")):
+        insertion_count_filtered,genes,contigs = gene_parser_genbank(annotation_file,insertion_count_filtered)
+        
+    elif annotation_file.endswith(".gff"):
+        insertion_count_filtered,genes,contigs = gene_parser_gff(annotation_file,insertion_count_filtered)
+        
+    insertion_count_filtered = inter_gene_annotater(annotation_file,insertion_count_filtered,ir_size_cutoff,genes,contigs)
+    
+    barcoded_insertions,insertions = [],[]
+    if barcode:
+        barcoded_insertions,insertions = insert_parser(insertion_count_filtered,name_folder,folder_path)
+
+    return insertion_count_filtered,barcoded_insertions,insertions
+
+def dict_filter(dictionary,read_cut):
     for key in list(dictionary):
         if dictionary[key].count < read_cut:
             del dictionary[key]
-            if barcode:
-                for key1 in list(redundancy_barcode):
-                    if (key[0] == key1[0]) & (key[1] == key1[1]) & (key[2] == key1[2]):
-                        del redundancy_barcode[key1]
-    return dictionary,redundancy_barcode
+    return dictionary
 
 def insert_parser(insertion_count,name_folder,folder_path):    
     insertions,barcoded_insertions = [],[]
+
     for key in insertion_count: 
-        insertion_count[key].mapQ = insertion_count[key].mapQ / insertion_count[key].count
-        
+
         contig = [insertion_count[key].contig]
         local = [insertion_count[key].local]
         orientation = [insertion_count[key].orientation]
@@ -323,6 +374,10 @@ def insert_parser(insertion_count,name_folder,folder_path):
         insertions.append(contig + local + orientation + count + mapq + \
                           gene_name + gene_product + gene_orientation + relative_gene_pos + \
                           [len(insertion_count[key].barcode)] + [reads] + [barcodes])
+            
+    return barcoded_insertions,insertions
+
+def annotate_barcodes_writer(barcoded_insertions,insertions,name_folder,folder_path):
     
     insertions.insert(0, ["#Contig"] + ["position"] + ["Orientation"] + ["Total Reads"] + \
                       ["Average MapQ"] + ["Gene Name"] + ["Gene Product"] + ["Gene Orientation"] + \
@@ -348,76 +403,8 @@ def insert_parser(insertion_count,name_folder,folder_path):
         writer = csv.writer(output)
         writer.writerows(barcoded_insertions)
 
-def inter_gene_annotater(annotation_file,insertion_count,ir_size_cutoff):
-    
-    contigs = {}
-    genes = []
-    if annotation_file.endswith(".gff"):
-        with open(annotation_file) as current:
-            for line in current:
-                GB = line.split('\t') #len(GB)
-                if "#" not in GB[0][:3]: #ignores headers
+def inter_gene_annotater(annotation_file,insertion_count,ir_size_cutoff,genes,contigs):
 
-                    start = int(GB[3])
-                    end = int(GB[4])
-
-                    features = GB[8].split(";") #gene annotation file
-                    feature = {}
-                    for entry in features:
-                        entry = entry.split("=")
-                        feature[entry[0]] = entry[1].replace("\n","")
-                    if "gene" in feature:
-                        gene=feature["gene"]
-                    if "Name" in feature:
-                        gene=feature["Name"]
-                    else:
-                        gene=feature["ID"]
-
-                    contig = GB[0]
-                    orientation = GB[6] #orientation of the gene
-                    
-                    key = (start,end,orientation,gene,contig)
-                    genes.append((start,end,orientation,gene,contig))
-                else:
-                    if "sequence-region" in GB[0]:
-                        GB = GB[0].split(" ")
-                        contigs[GB[-3]] = int(GB[-1][:-1])
-                
-                if "##FASTA" in GB[0]:
-                    break
-    else:
-        for rec in SeqIO.parse(annotation_file, "gb"):
-            for feature in rec.features:
-                if feature.type != 'source':
-                    start = feature.location.start
-                    end = feature.location.end
-                    orientation = feature.location.strand
-                    if orientation == -1:
-                        orientation = '-'
-                    else:
-                        orientation = '+'
-                    try:
-                        identity = feature.qualifiers['locus_tag'][0]
-                    except KeyError:
-                        identity = 'Undefined'
-                        
-                    for key, val in feature.qualifiers.items():   
-                        if "pseudogene" in key:
-                            gene = identity
-                            break 
-                        elif "gene" in key:
-                            gene = feature.qualifiers['gene'][0]
-                            break 
-                        else:
-                            gene = identity
-                            
-                    key = (start,end,orientation,gene,rec.id)
-                    genes.append((start,end,orientation,gene,rec.id))
-            contigs[rec.id] = len(rec.seq)
-    
-    genes = list(dict.fromkeys(genes))
-    genes.sort(key=lambda x: (x[-1], x[0])) #sort by start position of the gene and contig
-    
     ir_annotation = {}
     count = 0
     for i,gene in enumerate(genes[:-1]):
@@ -446,7 +433,7 @@ def inter_gene_annotater(annotation_file,insertion_count,ir_size_cutoff):
                 ir_name = f'IR_{count}_contig-start_{genes[0][3]}_{gene[2]}'
                 if ir_name not in ir_annotation:
                    ir_annotation[ir_name] = (0,genes[0][0],domain_size,contig)
-
+    
     for ir in ir_annotation:
         for key in insertion_count:
             if insertion_count[key].name is None:
@@ -454,7 +441,7 @@ def inter_gene_annotater(annotation_file,insertion_count,ir_size_cutoff):
                     if (int(insertion_count[key].local) >= ir_annotation[ir][0]) & (int(insertion_count[key].local) <= ir_annotation[ir][1]):
                         insertion_count[key].name = ir
                         insertion_count[key].relative_gene_pos = (int(insertion_count[key].local) - ir_annotation[ir][0]) / ir_annotation[ir][2]
-
+             
     return insertion_count
 
 def gene_parser_genbank(annotation_file,insertion_count):
@@ -465,6 +452,8 @@ def gene_parser_genbank(annotation_file,insertion_count):
     retrieving attributes such as start, end, orientation, identity, 
     and product for each gene.''' 
     
+    contigs = {}
+    genes = []
     for rec in SeqIO.parse(annotation_file, "gb"):
         for feature in rec.features:
             if feature.type != 'source':
@@ -501,7 +490,9 @@ def gene_parser_genbank(annotation_file,insertion_count):
                         break #avoids continuing the iteration and passing to another key, which would make "gene" assume another value
                     else:
                         gene = identity
-                
+
+                genes.append((start,end,orientation,gene,rec.id))
+
                 for key in insertion_count:
                     if insertion_count[key].contig == rec.id:
                         if (int(insertion_count[key].local) >= start) & (int(insertion_count[key].local) <= end):
@@ -509,11 +500,16 @@ def gene_parser_genbank(annotation_file,insertion_count):
                             insertion_count[key].product = product
                             insertion_count[key].gene_orient = orientation
                             insertion_count[key].relative_gene_pos = (int(insertion_count[key].local) - start) / domain_size
-                      
-    return insertion_count
+
+        contigs[rec.id] = len(rec.seq)
+        genes = list(dict.fromkeys(genes))
+        genes.sort(key=lambda x: (x[-1], x[0])) #sort by start position of the gene and contig
+    return insertion_count,genes,contigs
 
 def gene_parser_gff(annotation_file,insertion_count):
     
+    contigs = {}
+    genes = []
     with open(annotation_file) as current:
         for line in current:
             GB = line.split('\t') #len(GB)
@@ -531,7 +527,8 @@ def gene_parser_gff(annotation_file,insertion_count):
                 feature = {}
                 for entry in features:
                     entry = entry.split("=")
-                    feature[entry[0]] = entry[1].replace("\n","")
+                    if len(entry) == 2:
+                        feature[entry[0]] = entry[1].replace("\n","")
                 if "gene" in feature:
                     gene=feature["gene"]
                 if "Name" in feature:
@@ -555,17 +552,28 @@ def gene_parser_gff(annotation_file,insertion_count):
                             insertion_count[key].product =  feature['product']
                             insertion_count[key].gene_orient = orientation
                             insertion_count[key].relative_gene_pos = (int(insertion_count[key].local) - start) / domain_size
-                      
-    return insertion_count
+                            
+                contig = GB[0]
+                orientation = GB[6] #orientation of the gene
+                
+                key = (start,end,orientation,gene,contig)
+                genes.append(key)
+
+            if "sequence-region" in GB[0]:
+                GB = GB[0].split(" ")
+                contigs[GB[-3]] = int(GB[-1][:-1])
+                
+        genes = list(dict.fromkeys(genes))
+        genes.sort(key=lambda x: (x[-1], x[0])) #sort by start position of the gene and contig
+        
+    return insertion_count,genes,contigs
 
 def dictionary_parser(dictionary,barcode,folder_path,name_folder):
     
     insertions = []
 
     for key in dictionary:
-        if not barcode:
-            dictionary[key].mapQ = dictionary[key].mapQ / dictionary[key].count
-        
+
         contig = [dictionary[key].contig]
         local = [dictionary[key].local]
         orientation = [dictionary[key].orientation]
@@ -579,12 +587,12 @@ def dictionary_parser(dictionary,barcode,folder_path,name_folder):
         
         insertions.append(contig + local + orientation + border + count + mapQ +\
                           gene_name + gene_product + gene_orientation + relative_gene_pos)
-            
+
     insertions.insert(0, ["#Contig"] + ["position"] + ["Orientation"] + \
                       ["Transposon Border Sequence"] + ["Read Counts"] + \
                       ["Average mapQ across reads"] + ["Gene Name"] + ["Gene Product"] + \
                       ["Gene Orientation"] + ["Relative Position in Gene (0-1)"])
-    
+
     getNextFilePath(folder_path, "all_insertions_"+name_folder, insertions) #all the unique insertions
 
 if __name__ == "__main__":

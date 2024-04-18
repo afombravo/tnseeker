@@ -3,7 +3,7 @@ import subprocess
 import multiprocessing
 from tnseeker import Essential_Finder,reads_trimer,sam_to_insertions,insertions_over_genome_plotter
 import argparse
-import time
+import datetime
 
 ''' Tnseeker is a pipeline for transposon insertion sequencing (Tn-Seq) analysis. 
     It performs various operations such as trimming the reads, 
@@ -105,7 +105,7 @@ def bowtie_aligner_maker_single(variables):
                 "-x",f"{variables['index_dir']}{variables['strain']}",
                 "-U",f"{variables['fastq_trimed']}",
                 "-S",f"{variables['directory']}/alignment.sam",
-                "--no-unal",
+               # "--no-unal",
                 f"--threads {cpus}",
                 f"2>'{variables['directory']}/bowtie_align_log.log'"]
         
@@ -128,7 +128,7 @@ def bowtie_aligner_maker_paired(variables):
                 "-1",f"{variables['fastq_trimed'][0]}",
                 "-2",f"{variables['fastq_trimed'][1]}",
                 "-S",f"{variables['directory']}/alignment.sam",
-                "--no-unal",
+                #"--no-unal",
                 f"--threads {cpus}",
                 f"2>'{variables['directory']}/bowtie_align_log.log'"]
         
@@ -243,8 +243,8 @@ def essentials(variables):
                            f'{variables["strain"]}',
                            f'{variables["annotation_type"]}',
                            f'{variables["annotation_folder"]}',
-                           f'{variables["subdomain_length_down"]}',
                            f'{variables["subdomain_length_up"]}',
+                           f'{variables["subdomain_length_down"]}',
                            f'{variables["pvalue"]}',
                            f"{variables['intergenic_size_cutoff']}",
                            f"{variables['domain_uncertain_threshold']}"])
@@ -293,14 +293,14 @@ def input_parser(variables):
     parser.add_argument("--sl3",nargs='?',const=None,help="3' gene trimming percent for essentiality determination (number between 0 and 1)")
     
     args = parser.parse_args()
-
+    
+    variables["version"]="1.0.7"
+    print(f'\nVersion: {variables["version"]}\n')
+    
     if (args.s is None) or (args.sd is None) or (args.ad is None) or (args.at is None) or (args.st is None):
         print(parser.print_usage())
         raise ValueError("No arguments given")
-    
-    variables["version"]="1.0.5"
-    print(f'\nVersion: {variables["version"]}\n')
-    
+
     variables["full"]=True
     if args.e is not None:
         variables["full"] = False
@@ -381,11 +381,11 @@ def input_parser(variables):
     if args.dut is not None:
         variables["domain_uncertain_threshold"]=float(args.dut)
     
-    variables["subdomain_length_up"]=1
+    variables["subdomain_length_up"]=0
     if args.sl5 is not None:
         variables["subdomain_length_up"]=args.sl5
         
-    variables["subdomain_length_down"]=0
+    variables["subdomain_length_down"]=1
     if args.sl3 is not None:
         variables["subdomain_length_down"]=args.sl3
     
@@ -414,6 +414,8 @@ def variables_initializer():
     return variables
 
 def main():
+    print(f"\nStarting at: {datetime.datetime.now().strftime('%c')}")
+    
     variables = variables_initializer()
     
     if variables["full"]:
@@ -446,6 +448,8 @@ def main():
         print("Parsing insertions")
         sam_parser(variables)
         if variables["remove"]:
+            if variables["barcode"]:
+                os.remove(f"{variables['directory']}/barcoded_align.sam")
             os.remove(f"{variables['directory']}/alignment.sam")
     
         insertions_plotter(variables)
@@ -453,6 +457,8 @@ def main():
     if variables["essential_find"]:
         print("Finding Essentials")
         essentials(variables)
+        
+    print(f"Ended on: {datetime.datetime.now().strftime('%c')}")
     
 if __name__ == "__main__":
     main() 

@@ -111,12 +111,13 @@ def read_trimer(reading,sequences,quality_set,mismatches,trimming_len,miss_up,\
 
             if (len(quality_set.intersection(quality)) == 0):
                 read[0],read[2] = str(read[0],"utf-8"),str(read[2],"utf-8")
+                read[0] = read[0].split(" ")[0]
                 processed_read.append(read)
                 if barcode_allow:
                     barcode = barcodeID(sequence,sequence_bin,borders,miss_up,miss_down)
                     if barcode is not None:
                         if (len(quality_set_bar_up.intersection(quality)) == 0) & (len(quality_set_bar_down.intersection(quality)) == 0):
-                            barcode_pool.append([barcode]+[read[0]])
+                            barcode_pool.append([f"{barcode}{read[0]}"])
 
     return [processed_read,barcode_pool]
                 

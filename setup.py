@@ -5,7 +5,7 @@ this_directory = path.abspath(path.dirname(__file__))
 with open(path.join(this_directory, 'README.md'), encoding='utf-8') as f:
     long_description = f.read()
 
-VERSION = '1.0.5' 
+VERSION = '1.0.7' 
 DESCRIPTION = 'TnSeeker'
 LONG_DESCRIPTION = 'Versatile Python3 module for processing and analyzing anything related with Tn-Seq. Requires bowtie2 to be callable from terminal. File wise, only fastq and genbank annotation files are required.'
 
@@ -21,18 +21,19 @@ setup(
         long_description=long_description,
         long_description_content_type='text/markdown',
         packages=find_packages(),
-        install_requires=["numpy >= 1.19.2",
-                           "matplotlib >= 3.3.4",
-                           "numba >= 0.53.1",
-                           "biopython >= 1.81",
-                           "datetime",
-                           "argparse",
-                           "regex",
-                           "multiprocess",
-                           "pathlib",
-                           "scipy >= 1.6.2",
-                           "seaborn >= 0.12.1",
-                           "statsmodels >= 0.12.2"],
+        install_requires=["numpy == 1.26.4",
+                           "matplotlib == 3.8.2",
+                           "pandas ==  2.2.0", 
+                           "numba == 0.59.0",
+                           "biopython == 1.83",
+                           "datetime == 5.4",
+                           "argparse == 1.4.0",
+                           "regex == 2023.12.25",
+                           "multiprocess == 0.70.16",
+                           "pathlib == 1.0.1",
+                           "scipy == 1.12.0",
+                           "seaborn == 0.13.2",
+                           "statsmodels == 0.14.1"],
         
         keywords=['tn-seq', 'essentiality','rb-seq'],
         classifiers= [
@@ -42,5 +43,5 @@ setup(
             "Operating System :: OS Independent",
         ],
         include_package_data=True,
-        package_data={'': ['data/*.csv']},
+        package_data={'': ['data/*']},
 )

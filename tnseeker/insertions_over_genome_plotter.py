@@ -101,10 +101,11 @@ def plotter(directory,annotation,anno_type,strain):
         for rec in SeqIO.parse(annotation, "gb"):
             genome_seq[rec.id] = len(rec.seq)
           
-    cmap = matplotlib.cm.get_cmap('jet') #gnuplot
+    cmap = matplotlib.colormaps['jet'] #gnuplot
     colour = ['.9','.6']*len(genome_seq)
     
     fig, ax = plt.subplots()  
+    ax.remove()
     grid = plt.GridSpec(1, 5, wspace=0.4, hspace=0.3)
     ax=plt.subplot(grid[0, :4])
     ax.set_ylim(1, 1000000)
@@ -207,6 +208,7 @@ def plotter(directory,annotation,anno_type,strain):
     adjust_spines(ax2, ['left', 'bottom'], (0, ax2.get_xlim()[1]), (ax2.get_ylim()))
     
     plt.savefig(f"{directory}/reads.png", dpi=300,bbox_inches='tight')
+    plt.close()
 
 if __name__ == "__main__":
     if len(sys.argv) > 2:

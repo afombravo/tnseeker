@@ -1,4 +1,3 @@
-import csv
 import statsmodels.stats.multitest
 from Bio import SeqIO
 import os
@@ -11,10 +10,12 @@ from scipy.stats import binomtest
 import multiprocessing
 import matplotlib.pyplot as plt
 import sys
-import datetime
 from numba import njit
 import pkg_resources
 import pandas as pd
+import csv
+import subprocess
+from pathlib import Path
 
 """
 Disclaimer: 
@@ -24,7 +25,6 @@ Disclaimer:
     It´s more of a pathwork than anything else at the moment.
     Please don´t judge me too harshly.
 """
-
 
 def inputs(argv):
     ''' The inputs function initializes a global Variables instance with various attributes 
@@ -38,17 +38,17 @@ def inputs(argv):
     variables.strain = argv[1]  # strain name, and annotation file name
     variables.annotation_type = argv[2]
     variables.annotation_folder = argv[3]
-    variables.subdomain_length = [float(argv[4]), float(argv[5])]
+    variables.subdomain_length = [float(argv[4]), float(argv[5])] #upstream, downstream
     variables.pvalue = float(argv[6])
     variables.ir_size_cutoff = int(argv[7])
     variables.output_name = variables.strain + "_alldomains"
     variables.domain_uncertain_threshold = float(argv[8])  # 0.75
+    variables.biggest_gene = 0
 
     variables.true_positives = pkg_resources.resource_filename(
-        __name__, 'data/Truepositivs.csv')
+        __name__, 'data/true_positives.fasta')
     variables.true_negatives = pkg_resources.resource_filename(
-        __name__, 'data/Truenegativs.csv')
-
+        __name__, 'data/true_negatives.fasta')
 
 def path_finder():
     ''' The path_finder function searches for and sets file paths for both insertions file and the 
@@ -234,6 +234,92 @@ class Gene:
         self.subdomain_insert_orient_neg = subdomain_insert_orient_neg or dict()
         self.significant = significant or dict()
 
+def subprocess_cmd(command):
+    try:
+        return subprocess.check_output(command)
+    except subprocess.CalledProcessError as e:
+        return e.output.decode()
+
+def blast_maker():
+    
+    def tblastn(file):
+        
+        out = f"{blast_db}/{Path(variables.strain).stem}_{Path(file).stem}.txt"
+
+        send = ["tblastn",
+                "-query",
+                file,
+                "-db",
+                fasta,
+                "-evalue",
+                "0.00001",
+                "-out",
+                out,
+                "-outfmt",
+                "6"]
+        
+        subprocess_cmd(send)
+
+        found_true = {}
+        with open(out) as current:
+            for line in current:
+                line = line.split("\t")
+                first = int(line[8])
+                last = int(line[9])
+                if first > last:
+                    orientation = "-"
+                    start = last
+                    end = first
+                else:
+                    orientation = "+"
+                    start = first
+                    end = last
+                found_true[line[0]] = Gene(gene=line[0],
+                                           contig=line[1],
+                                           start=start,
+                                           end=end,
+                                           orientation=orientation)
+
+        return found_true
+    
+    blast_db = f"{variables.directory}/blast_db"
+    if not os.path.isdir(blast_db):
+        os.mkdir(blast_db)
+    
+    if variables.annotation_type == "gb":
+        fasta = f"{blast_db}/{Path(variables.strain).stem}.fasta"
+        with open(variables.annotation_file_paths[0], "r") as input_handle:
+            with open(fasta, "w") as output_handle:
+                sequences = SeqIO.parse(input_handle, "genbank")
+                SeqIO.write(sequences, output_handle, "fasta")
+    else:
+        fasta_in = variables.annotation_file_paths[1]
+        fasta = f"{blast_db}/{Path(variables.strain).stem}.fasta"
+        send = ["cp",
+                fasta_in,
+                fasta]
+        subprocess_cmd(send)
+
+    send = ["makeblastdb",
+            "-in",
+            fasta,
+            "-dbtype",
+            "nucl"]
+    
+    subprocess_cmd(send)
+
+    variables.true_positives = tblastn(variables.true_positives)
+    variables.true_negatives = tblastn(variables.true_negatives)
+    
+    print(f"\nFound {len(variables.true_positives)} benchmark essential genes.\n")
+    
+    compiled_benchmark = {**variables.true_positives, **variables.true_negatives}
+    for gene in compiled_benchmark:
+        lenght = compiled_benchmark[gene].end-compiled_benchmark[gene].start
+        if lenght > variables.biggest_gene:
+            variables.biggest_gene = lenght
+    
+    return compiled_benchmark
 
 def domain_resizer(domain_size_multiplier, basket):
     ''' The domain_resizer function takes a domain size multiplier and a dictionary 
@@ -624,7 +710,11 @@ def gene_info_parser_genbank(file):
             start = feature.location.start
             end = feature.location.end
             orientation = feature.location.strand
-
+            
+            current = end-start
+            if current > variables.biggest_gene:
+                variables.biggest_gene = current
+            
             try:
                 identity = feature.qualifiers['locus_tag'][0]
 
@@ -739,12 +829,17 @@ def gene_info_parser_gff(file):
                 if GB[2] == "gene":
                     start = int(GB[3])
                     end = int(GB[4])
-    
+                    
+                    lenght = end-start
+                    if lenght > variables.biggest_gene:
+                        variables.biggest_gene = lenght
+                    
                     features = GB[8].split(";")  # gene annotation file
                     feature = {}
                     for entry in features:
                         entry = entry.split("=")
-                        feature[entry[0]] = entry[1].replace("\n", "")
+                        if len(entry) == 2:
+                            feature[entry[0]] = entry[1].replace("\n","")
                     if "gene" in feature:
                         gene = feature["gene"]
                     if "Name" in feature:
@@ -757,12 +852,15 @@ def gene_info_parser_gff(file):
     
                     basket[feature["ID"]] = Gene(gene=gene, start=start, end=end, orientation=orientation,
                                                  identity=feature["ID"], product=feature["product"], contig=contig)
-    
+
                     genes.append((start, feature["ID"], contig))
 
             if "##FASTA" in GB[0]:
                 break
-
+    
+    if len(basket) == 0:
+        print("Watch out, no genomic features were loaded. The gff file is not being parsed correctly.")
+        
     basket = inter_gene_annotater(basket, genes)
 
     for gene in basket:
@@ -776,7 +874,7 @@ def gene_info_parser_gff(file):
     return basket
 
 
-def insertions_parser():
+def insertions_parser(startup=True):
     ''' This function, insertions_parser, performs the following tasks:
 
         1. Parses an insertion file to identify unique insertions and their orientation, 
@@ -794,7 +892,9 @@ def insertions_parser():
     insertions_df["unique"] = insertions_df["#Contig"] + \
         insertions_df["position"].astype(str)+insertions_df["Orientation"]
     insertions_df.drop_duplicates(subset=['unique'], inplace=True)
-    print(f"Total Insertions in library: {len(insertions_df)}")
+    if startup:
+        print(f"Total Insertions in library: {len(insertions_df)}")
+        
     insertions_df.drop(
         ['Read Counts', 'Average mapQ across reads', "unique"], axis=1, inplace=True)
 
@@ -837,14 +937,15 @@ def insertions_parser():
 
     # calculating the insertion frequency
     variables.chance_motif_tn = variables.normalizer()
-
-    print("Transposon insertion frequency (on leading strand):")
-    for tn, mtv in zip(variables.transposon_motiv_freq, variables.di_motivs):
-        print("{}: {}%".format(mtv, tn))
+    
+    if startup:
+        print("Transposon insertion frequency (on leading strand):")
+        for tn, mtv in zip(variables.transposon_motiv_freq, variables.di_motivs):
+            print("{}: {}%".format(mtv, tn))
 
 
 def cpu():
-    ''' The cpu function determines the available number of CPUs that cna be used.
+    ''' The cpu function determines the available number of CPUs that can be used.
     If more than one is available, one of them is left to avoid clogging the computer,
     while the others are used by the program. '''
 
@@ -966,7 +1067,7 @@ def multi_annotater(basket):
     return basket
 
 
-def pvalue_iteration(names, pvalues_list, pvaluing_array, pvalue, pvalue_listing, euclidean_points, variables, baseline_essentials_master, baseline_non_essentials_master):
+def pvalue_iteration(names, pvalues_list, pvaluing_array, pvalue, pvalue_listing, euclidean_points, variables):
     ''' This function performs a p-value iteration analysis to determine the 
     true positive rate (TPR) and specificity of a given test at different 
     p-value thresholds. It calls the function 'pvaluing' to calculate the 
@@ -975,8 +1076,10 @@ def pvalue_iteration(names, pvalues_list, pvaluing_array, pvalue, pvalue_listing
     specificity from these values and appends them, along with the p-value 
     threshold, to two lists. Finally, it returns these two lists. '''
 
-    baseline_essentials, baseline_non_essentials, pvaluing_array_copy = baseline_essentials_master.copy(
-    ), baseline_non_essentials_master.copy(), pvaluing_array.copy()
+    pvaluing_array_copy = pvaluing_array.copy()
+    baseline_essentials = set(variables.true_positives.keys())
+    baseline_non_essentials = set(variables.true_negatives.keys())
+    
     pvaluing_array_discard, strain_existent_essentials, fdr, rejected_baseline_essentials, \
         rejected_baseline_nonessentials, strain_existent_nonessentials = pvaluing(
             names, pvalues_list, pvaluing_array_copy, pvalue, variables, baseline_essentials, baseline_non_essentials)
@@ -1007,22 +1110,6 @@ def pvalue_iteration(names, pvalues_list, pvaluing_array, pvalue, pvalue_listing
     return pvalue_listing, euclidean_points
 
 
-def reference_essentials_loader():
-    ''' This function loads two sets of gene names from two separate files, 
-    representing the known essential and non-essential genes in the reference genome.  '''
-
-    baseline_essentials_master = set()
-    with open(variables.true_positives) as current:
-        for line in current:
-            baseline_essentials_master.add(line[:-1])
-
-    baseline_non_essentials_master = set()
-    with open(variables.true_negatives) as current:
-        for line in current:
-            baseline_non_essentials_master.add(line[:-1])
-    return baseline_essentials_master, baseline_non_essentials_master
-
-
 def class_to_numba(basket):
     ''' The class_to_numba function takes a dictionary basket containing gene 
     information and extracts significant gene domains to convert them into 
@@ -1050,8 +1137,7 @@ def class_to_numba(basket):
                                            dtype=np.float64))
 
     pvaluing_array = np.array(pvaluing_array)
-    baseline_essentials_master, baseline_non_essentials_master = reference_essentials_loader()
-    return baseline_essentials_master, baseline_non_essentials_master, pvaluing_array, names, pvalues_list
+    return pvaluing_array, names, pvalues_list
 
 
 def multi_pvalue_iter(basket):
@@ -1066,12 +1152,12 @@ def multi_pvalue_iter(basket):
     pool, cpus = cpu()
     result_objs, pvalue_listing, euclidean_points = [], [], []
 
-    baseline_essentials_master, baseline_non_essentials_master, pvaluing_array, names, pvalues_list = class_to_numba(
-        basket)
+    pvaluing_array, names, pvalues_list = class_to_numba(basket)
 
     for p in pvalue:
-        result = pool.apply_async(pvalue_iteration, args=((names, pvalues_list, pvaluing_array, p, pvalue_listing,
-                                  euclidean_points, variables, baseline_essentials_master, baseline_non_essentials_master)))
+        result = pool.apply_async(pvalue_iteration, args=((names, pvalues_list, 
+                                                           pvaluing_array, p, pvalue_listing,
+                                                           euclidean_points, variables)))
         result_objs.append(result)
 
     pool.close()
@@ -1095,16 +1181,20 @@ def final_compiler(optimal_basket, pvalue, euclidean_points):
     curve plot for the data. Finally, the function saves the table and plot 
     to files in a specified directory. '''
 
-    baseline_essentials_master, baseline_non_essentials_master, pvaluing_array, names, pvalues_list = class_to_numba(
-        optimal_basket)
-    result = pvaluing(names, pvalues_list, pvaluing_array, pvalue, variables,
-                      baseline_essentials_master, baseline_non_essentials_master)
-    essentiality_list = result[0]
-    fdr = result[2]
+    pvaluing_array, names, pvalues_list = class_to_numba(optimal_basket)
+
+    fdr = statsmodels.stats.multitest.multipletests(
+        pvalues_list, pvalue, "fdr_bh")  # multitest correction, fdr_bh
+
+    for i, (name, entry) in enumerate(zip(names, pvaluing_array)):
+        remove_signal, pvaluing_array = pvaluing_jit(
+            pvaluing_array, fdr[0], fdr[-1], i)
+    
+    fdr = fdr[3]
     legenda = f"Threshold p-value: {pvalue}"
     essentiality = []
 
-    for i, entry in enumerate(essentiality_list):
+    for i, entry in enumerate(pvaluing_array):
         if entry[3] == 0:
             essentiality.append("too small for assaying")
         if entry[3] == 1:
@@ -1125,7 +1215,7 @@ def final_compiler(optimal_basket, pvalue, euclidean_points):
     for gene in optimal_basket:
         for domain in optimal_basket[gene].significant:
             genes_list.append([optimal_basket[gene].significant[domain].dom_insert] +
-                              [optimal_basket[gene].significant[domain].pvalue] +
+                              [str(optimal_basket[gene].significant[domain].pvalue).replace("'","")] +
                               [optimal_basket[gene].contig] +
                               [optimal_basket[gene].identity] +
                               [optimal_basket[gene].product] +
@@ -1210,11 +1300,11 @@ def final_compiler(optimal_basket, pvalue, euclidean_points):
     fig.tight_layout()
     plt.savefig(
         f"{variables.directory}/ROC_curves{variables.strain}.png", dpi=300)
+    plt.close()
+    gene_essentiality_compressor(optimal_basket,genes_list)
 
-    gene_essentiality_compressor()
 
-
-def genome_loader():
+def genome_loader(startup=True):
     ''' This function loads the genome sequence and stores it in a dictionary 
     named `genome_seq` under their respective contigs. It also initializes 
     empty dictionaries named `borders_contig`, `orientation_contig`, and 
@@ -1238,7 +1328,8 @@ def genome_loader():
                     variables.genome_seq[contig] += line[:-1]
 
         for contig in variables.genome_seq:
-            print(f"Loaded: {contig}")
+            if startup:
+                print(f"Loaded: {contig}")
             variables.genome_length += len(variables.genome_seq[contig])
 
     elif variables.annotation_type == "gb":
@@ -1248,7 +1339,8 @@ def genome_loader():
             variables.borders_contig[variables.annotation_contig] = {}
             variables.orientation_contig[variables.annotation_contig] = {}
             variables.insertions_contig[variables.annotation_contig] = {}
-            print(f"Loaded: {variables.annotation_contig}")
+            if startup:
+                print(f"Loaded: {variables.annotation_contig}")
             variables.genome_seq[variables.annotation_contig] = str(rec.seq)
 
 
@@ -1286,7 +1378,6 @@ def domain_iterator(basket):
 
         basket = orientation_pvaluing(basket)
         pvalue_listing, euclidean_points = multi_pvalue_iter(basket)
-
         # point where TPR_sensitivity = 1 and 1-specificity = 0
         convergence = [[0] + [1]] * len(np.array(euclidean_points[0]))
 
@@ -1314,37 +1405,33 @@ def domain_iterator(basket):
             [current_gap] + [best_pvalue] + [best_distance] + [i] + [euclidean_points])
         return iterator_store
 
-    biggest_gene = 0
-    for gene in basket:
-        current = basket[gene].length
-        if current > biggest_gene:
-            biggest_gene = current
-
     euclidean_distances = []
     iterator_store = []
-    i, current_gap = 1, 0
+    i, current_gap = 0, 0
 
     try:
 
         iteration = 1
         for f in variables.domain_iteration:
-            if int(variables.genome_length / variables.total_insertions * f) <= biggest_gene:
+            if int(variables.genome_length / variables.total_insertions * f) <= variables.biggest_gene:
                 iteration += 1
     
-        while current_gap <= biggest_gene:
+        while (current_gap <= variables.biggest_gene) and (i+1 < len(variables.domain_iteration)):
             current_gap = int(variables.genome_length /
                               variables.total_insertions * variables.domain_iteration[i])
-            print(f"Current domain division iteration: {i} out {iteration}")
+            print(f"Current domain division iteration: {i+1} out {iteration}")
             iterator_store = iterating(
                 i, iterator_store, euclidean_distances, basket, current_gap)
             i += 1
             
+        # sort by best eucledian distance
+        sorted_optimal = sorted(iterator_store, key=lambda e: e[2])
+        variables.best_domain_size = sorted_optimal[0][0]
+        
     except Exception:
-        print("Make sure you have enough unique insertions in your library. It might not be saturating enough.")
-
-    # sort by best eucledian distance
-    sorted_optimal = sorted(iterator_store, key=lambda e: e[2])
-    variables.best_domain_size = sorted_optimal[0][0]
+        print("\nLow saturating library detected\n")
+        variables.best_domain_size = sorted_optimal[0]
+        
     print(f"Optimal domain division size: {variables.best_domain_size}bp")
     fig, ax1 = plt.subplots()
 
@@ -1367,20 +1454,17 @@ def domain_iterator(basket):
     fig.tight_layout()
     plt.savefig(os.path.join(variables.directory,
                 "ROC_curves_iterator_%s.png" % variables.strain), dpi=300)
-
+    plt.close()
     best_index = int(sorted_optimal[0][3])
     output_writer(variables.directory, "Best_ROC_points{}".format(
         variables.output_name), iterator_store[best_index][4][0])
-    basket = domain_resizer(variables.domain_iteration[best_index], basket)
-    basket = multi_annotater(basket)
 
-    return basket, iterator_store[best_index][1], iterator_store[best_index][4]
+    return best_index, iterator_store[best_index][1], iterator_store[best_index][4]
 
-
-def gene_essentiality_compressor():
-
+def gene_essentiality_compressor(basket,genes_list):
+    
     essentials = pd.read_csv(f"{variables.directory}/{variables.output_name}.csv",
-                             skiprows=9)
+                             skiprows=9,low_memory=False)
 
     classifier = {'Essential': 1,
                   'Likelly Essential': 2,
@@ -1431,10 +1515,22 @@ def gene_essentiality_compressor():
                     essentials.loc[i, 'Full gene essentiality'] = [
                         n for n in classifier if classifier[n] == j][0]
                     break
+    
+    final_out = [["Gene ID"] + ["Gene Name"] + ["Gene Orientation"] +
+                  ["Contig"] + ["Gene Lenght"] + ["Gene Product"] +
+                  ["Total Number of insertions"] + ["Essentiality"]]
 
-    essentials.to_csv(
-        f"{variables.directory}/{variables.output_name}_final.csv", index=False)
-
+    for gene in basket:
+        final_out.append([basket[gene].identity] +
+                          [basket[gene].gene] +
+                          [basket[gene].orientation] +
+                          [basket[gene].contig] +
+                          [basket[gene].length] +
+                          [basket[gene].product] +
+                          [sum(basket[gene].domain_insertions_total)] +
+                          [essentials[essentials["Gene ID"]==gene]["Full gene essentiality"].iloc[0]])
+    
+    output_writer(variables.directory, f"{variables.output_name}_final", final_out)
 
 def main(argv):
     ''' This function is the main function that calls all the other 
@@ -1444,17 +1540,25 @@ def main(argv):
     of genes, generates a matrix of gene insertions, iterates over different 
     domain sizes and identifies the optimal one, compiles the final results, 
     and prints the start and end times of the program execution. '''
-
-    print(f"\nStarting at: {datetime.datetime.now().strftime('%c')}")
+    
     inputs(argv)
     path_finder()
-    genome_loader()
-    insertions_parser()
+    genome_loader(startup=True)
+    insertions_parser(startup=True)
+    evaluator_basket = blast_maker()
+    if (len(variables.true_positives) != 0) and (len(variables.true_negatives) != 0):
+        evaluator_basket = gene_insertion_matrix(evaluator_basket)
+        best_index, pvalue, euclidean_points = domain_iterator(evaluator_basket)
+    else:
+        best_index, pvalue, euclidean_points = 0,variables.pvalue,[[[0,0],[0,0]]]
+
+    genome_loader(startup=False) # create a cleaner version where this doesnt need to repeat
+    insertions_parser(startup=False)
     basket = basket_storage()
     basket = gene_insertion_matrix(basket)
-    best_basket, pvalue, euclidean_points = domain_iterator(basket)
+    best_basket = domain_resizer(variables.domain_iteration[best_index], basket)
+    best_basket = multi_annotater(best_basket)
     final_compiler(best_basket, pvalue, euclidean_points)
-    print(f"Ended on: {datetime.datetime.now().strftime('%c')}")
 
 
 if __name__ == "__main__":
