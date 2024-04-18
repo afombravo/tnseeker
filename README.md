@@ -5,16 +5,21 @@ Tnseeker is under active developement and is available as is. Contact me if you 
 
 ## Requirements
 The tnseeker pipeline requires Python3, Bowtie2, and BLAST, to be callable from the terminal (and added to path). 
+tnseeker requires several dependencies, all automatically instalable. A notable exception is the poibin module, which is available in the current tnseeker folder (you as the user don't need to do anything else), and can be originally be found here: https://github.com/tsakim/poibin
 
-### For local BLAST
+## Instalation
+
+#### For local BLAST
 `sudo apt install ncbi-blast+`
 
-### For bowtie2
+#### For bowtie2
 `sudo apt update`
+
 `sudo apt install bowtie2=2.4.4-1`
 
-## Tnseeker 
-tnseeker can be installed as PyPI module with the folowing:
+#### Tnseeker 
+Tnseeker requires Python>=3.9 installed.
+Tnseeker can then be installed as a PyPI module with the folowing:
 
 `pip install tnseeker`
 
