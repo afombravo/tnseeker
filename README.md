@@ -4,12 +4,21 @@ Tnseeker is an advanced pipeline tailored for transposon insertion sequencing (T
 Tnseeker is under active developement and is available as is. Contact me if you are interested in using the program or have any questions. Bugs can be expected. Please report any weird or unintented behaviour. 
 
 ## Requirements
-The tnseeker pipeline requires both Python3 and Bowtie2 to be callable from the terminal (and added to path). 
+The tnseeker pipeline requires Python3, Bowtie2, and BLAST, to be callable from the terminal (and added to path). 
 
-## Executing 
+### For local BLAST
+`sudo apt install ncbi-blast+`
+
+### For bowtie2
+`sudo apt update`
+`sudo apt install bowtie2=2.4.4-1`
+
+## Tnseeker 
 tnseeker can be installed as PyPI module with the folowing:
 
 `pip install tnseeker`
+
+## Executing 
 
 tnseeker is executable from the command line by typing:
 
@@ -81,6 +90,9 @@ An example use case is the folowing. See below the meaning of the input argument
   --pv [PV]    Essential Finder pvalue threshold for essentiality
                determination
 
+  --dut [DUT]  fraction of the minimal amount of 'too small domains' in a gene before the entire gene is deemed
+               uncertain for essentiality inference
+  
   --sl5 [SL5]  5' gene trimming percent for essentiality determination (number
                between 0 and 1)
 
@@ -89,7 +101,7 @@ An example use case is the folowing. See below the meaning of the input argument
                
 ## Dependencies
 
-tnseeker requires several dependencies, all instalable via `pip` commands.
+tnseeker requires several dependencies, all automatically instalable
 A notable exception is the poibin module, which is available in the current tnseeker folder (you as the user don't need to do anything else), and can be originally be found here: https://github.com/tsakim/poibin
 
 ### File requirements
@@ -107,6 +119,6 @@ tnseeker requires several input files:
 
 tnseeker is composed of 2 submodules: 
 
-1. the initial sequencing processing: Handles the read trimming and alignment, creating a compiled .csv with all found transposon insertions.
+1. the initial sequencing processing: Handles the read trimming and alignment, creating a compiled .csv with all found transposon insertions. When individual transposon read associated barcodes are present, these are also extracted.
 
 2. The Essential_finder: Infers gene essentiality from the insertion information found in the previous .csv file. tnseeker can thus be run on a standalone mode if the appropriate .csv and annotation files are indicated. 
