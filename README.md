@@ -103,10 +103,6 @@ An example use case is the folowing. See below the meaning of the input argument
   --sl3 [SL3]  3' gene trimming percent for essentiality determination (number
                between 0 and 1)
                
-## Dependencies
-
-tnseeker requires several dependencies, all automatically instalable
-A notable exception is the poibin module, which is available in the current tnseeker folder (you as the user don't need to do anything else), and can be originally be found here: https://github.com/tsakim/poibin
 
 ### File requirements
 
