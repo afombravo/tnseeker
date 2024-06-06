@@ -8,6 +8,8 @@ from Bio import SeqIO
 import multiprocessing
 import pkg_resources
 import subprocess
+import datetime
+from colorama import Fore
 
 """ This script processes and analyzes sequencing data from a SAM (Sequence Alignment/Map) file. 
     The main purpose is to extract information about transposon insertions in a given genome 
@@ -186,14 +188,15 @@ def extractor(name_folder, folder_path, pathing, paired_ended,barcode,\
     
     file = pathing[0]
     if barcode:
-        print("Linking barcodes to insertion positions")
+        print(f"{Fore.BLUE} {datetime.datetime.now().strftime('%c')}{Fore.RESET} [{Fore.GREEN}INFO{Fore.RESET}] Linking barcodes to insertion positions")
         file = f"{folder_path}/barcoded_align.sam"
         subprocess_cmd([pkg_resources.resource_filename(__name__, 'data/barcode2sam.sh'),
                        f"{folder_path}/alignment.sam",
                        f"{folder_path}/barcodes_1.txt",
                        file,
                        folder_path])
-        
+    
+    print(f"{Fore.BLUE} {datetime.datetime.now().strftime('%c')}{Fore.RESET} [{Fore.GREEN}INFO{Fore.RESET}] Parsing Bowtie alignments into an insertion matrix")
     with open(file) as current:
         for line in current:
             sam = line.split('\t')
@@ -301,11 +304,14 @@ def extractor(name_folder, folder_path, pathing, paired_ended,barcode,\
     for entry in result:
         insertion,barcoded,insert = entry
         final_compiler = {**final_compiler, **insertion}
-        if barcode:
-            for a,b in zip(barcoded,insert):
-                barcoded_insertions_final.append(a)
-                insertions_final.append(b)
 
+        if barcode:
+            for barcode in barcoded:
+                barcoded_insertions_final.append(barcode)
+        
+        for insertion in insert:
+            insertions_final.append(insertion)
+    
     if barcode:
         annotate_barcodes_writer(barcoded_insertions_final,insertions_final,name_folder,folder_path)
         
@@ -313,10 +319,16 @@ def extractor(name_folder, folder_path, pathing, paired_ended,barcode,\
         
     q = plotter(insertion_count, f"Unique insertions_{name_folder}", folder_path)
 
-    reads = f"Total Aligned Reads: {aligned_reads}\nTotal Quality Passed Reads: {aligned_valid_reads}\nFiltered Vs. Raw Read % ratio: {round(aligned_valid_reads/aligned_reads*100,2)}%\n"
-    e = "Number of total unique insertions: {}\n".format(len(insertion_count))
-    print(reads,e)
-
+    reads = f" Total Aligned Reads: {aligned_reads}\nTotal Quality Passed Reads: {aligned_valid_reads}\nFiltered Vs. Raw Read % ratio: {round(aligned_valid_reads/aligned_reads*100,2)}%\n"
+    e = " Number of total unique insertions: {}\n".format(len(insertion_count))
+    
+    print(f"\n{Fore.YELLOW} -- Library statistics -- {Fore.RESET}\n")
+    print(f"{Fore.GREEN} Total aligned reads: {Fore.RESET}{aligned_reads}")
+    print(f"{Fore.GREEN} Total quality passed reads: {Fore.RESET}{aligned_valid_reads}")
+    print(f"{Fore.GREEN} Filtered Vs. Raw Read % ratio: {Fore.RESET}{round(aligned_valid_reads/aligned_reads*100,2)}%")
+    print(f"{Fore.GREEN} Number of total unique insertions: {Fore.RESET}{len(insertion_count)}")
+    print(f"\n{Fore.YELLOW} ---- {Fore.RESET}\n")
+    
     with open("{}/library_stats_{}.txt".format(folder_path,name_folder), "w+") as current:
         current.write(reads+q+e)
 
@@ -336,7 +348,7 @@ def annotation_processer(insertion_count_filtered,read_threshold,read_cut,
     
     barcoded_insertions,insertions = [],[]
     if barcode:
-        barcoded_insertions,insertions = insert_parser(insertion_count_filtered,name_folder,folder_path)
+        barcoded_insertions,insertions = insert_parser(insertion_count_filtered,name_folder,folder_path,barcode)
 
     return insertion_count_filtered,barcoded_insertions,insertions
 
@@ -346,7 +358,7 @@ def dict_filter(dictionary,read_cut):
             del dictionary[key]
     return dictionary
 
-def insert_parser(insertion_count,name_folder,folder_path):    
+def insert_parser(insertion_count,name_folder,folder_path,barcode):    
     insertions,barcoded_insertions = [],[]
 
     for key in insertion_count: 
@@ -370,11 +382,12 @@ def insert_parser(insertion_count,name_folder,folder_path):
             barcoded_insertions.append([bar] + [read] + contig + local +\
                                        orientation + count + mapq + gene_name + \
                                        gene_product + gene_orientation + relative_gene_pos)
-            
+    
+
         insertions.append(contig + local + orientation + count + mapq + \
                           gene_name + gene_product + gene_orientation + relative_gene_pos + \
                           [len(insertion_count[key].barcode)] + [reads] + [barcodes])
-            
+
     return barcoded_insertions,insertions
 
 def annotate_barcodes_writer(barcoded_insertions,insertions,name_folder,folder_path):
@@ -417,22 +430,30 @@ def inter_gene_annotater(annotation_file,insertion_count,ir_size_cutoff,genes,co
                 count += 1
                 ir_annotation[f'IR_{count}_{gene[3]}_{gene[2]}_UNTIL_{genes[i+1][3]}_{gene[2]}'] = (gene[1],genes[i+1][0],domain_size,contig)
 
-        if (contig != genes[i+1][-1]) or (i==0) or (i==len(genes)-2):
+        if contig != genes[i+1][-1]:
 
             circle_closer = gene[1] + ir_size_cutoff 
             domain_size = contigs[contig] - circle_closer
             if domain_size >= 1:
                 count += 1
-                ir_name = f'IR_{count}_contig-start_{genes[0][3]}_{gene[2]}'
+                ir_name = f'IR_{count}_{gene[3]}_{gene[2]}_contig_{contig}_-end'
                 if ir_name not in ir_annotation:
                     ir_annotation[ir_name] = (genes[-1][1],contigs[contig],domain_size,contig)
 
-            domain_size = genes[i+1][0] - ir_size_cutoff
-            if domain_size  >= 1:
-                count += 1
-                ir_name = f'IR_{count}_contig-start_{genes[0][3]}_{gene[2]}'
-                if ir_name not in ir_annotation:
-                   ir_annotation[ir_name] = (0,genes[0][0],domain_size,contig)
+    circle_closer = genes[-1][1] + ir_size_cutoff 
+    domain_size = contigs[contig] - circle_closer
+    if domain_size >= 1:
+        count += 1
+        ir_name = f'IR_{count}_{genes[-1][3]}_{genes[-1][2]}_contig_{contig}_-end'
+        if ir_name not in ir_annotation:
+            ir_annotation[ir_name] = (genes[-1][1],contigs[contig],domain_size,contig)
+
+    domain_size = genes[0][0] - ir_size_cutoff
+    if domain_size  >= 1:
+        count += 1
+        ir_name = f'IR_{count}_contig_{contig}_-start_{genes[0][3]}_{genes[0][2]}'
+        if ir_name not in ir_annotation:
+           ir_annotation[ir_name] = (0,genes[0][0],domain_size,contig)
     
     for ir in ir_annotation:
         for key in insertion_count:
@@ -552,9 +573,6 @@ def gene_parser_gff(annotation_file,insertion_count):
                             insertion_count[key].product =  feature['product']
                             insertion_count[key].gene_orient = orientation
                             insertion_count[key].relative_gene_pos = (int(insertion_count[key].local) - start) / domain_size
-                            
-                contig = GB[0]
-                orientation = GB[6] #orientation of the gene
                 
                 key = (start,end,orientation,gene,contig)
                 genes.append(key)
@@ -565,6 +583,9 @@ def gene_parser_gff(annotation_file,insertion_count):
                 
         genes = list(dict.fromkeys(genes))
         genes.sort(key=lambda x: (x[-1], x[0])) #sort by start position of the gene and contig
+        
+        if len(genes) == 0:
+            print(f"{Fore.BLUE} {datetime.datetime.now().strftime('%c')}{Fore.RESET} [{Fore.YELLOW}WARNING{Fore.RESET}] Watch out, no genomic features were loaded. The gff file is not being parsed correctly, or was not loaded.")
         
     return insertion_count,genes,contigs
 

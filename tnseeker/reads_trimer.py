@@ -5,6 +5,8 @@ from numba import njit
 import numpy as np
 import gzip
 import glob
+from colorama import Fore
+import datetime
 
 """ This script is for processing and trimming high-throughput sequencing data. 
     It takes as input a fastq file, a folder path to store the output, the 
@@ -153,7 +155,7 @@ def extractor(fastq,folder_path,sequences,barcode,barcode_upstream,barcode_downs
     file_counter = 0
     for file in fastq:
         file_counter += 1
-        print(f'Processing {file_counter} out of {file_number}')
+        print(f"{Fore.BLUE} {datetime.datetime.now().strftime('%c')}{Fore.RESET} [{Fore.GREEN}INFO{Fore.RESET}] Processing {file_counter} out of {file_number} fastq files")
         try:
             with gzip.open(file, "rb") as current:
                 for line in current:
@@ -286,8 +288,6 @@ def main(argv):
         miss_down = int(argv[-5])
         phred_up = int(argv[-4])
         phred_down = int(argv[-3])
-
-    print("Trimming Sequences")
 
     try:
         extractor(fastq1,folder_path,sequences,barcode,barcode_upstream,\

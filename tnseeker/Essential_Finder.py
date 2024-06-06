@@ -16,6 +16,10 @@ import pandas as pd
 import csv
 import subprocess
 from pathlib import Path
+from colorama import Fore
+import datetime
+import matplotlib
+matplotlib.use('Agg')
 
 """
 Disclaimer: 
@@ -78,7 +82,8 @@ def path_finder():
             variables.annotation_folder, '*.fasta', variables.strain))
 
         if len(variables.annotation_file_paths) < 2:
-            print("Wrong file paths. Check file names")
+            print(f"{Fore.BLUE} {datetime.datetime.now().strftime('%c')}{Fore.RESET} [{Fore.RED}FATAL{Fore.RESET}] Check there is a .fasta and .gff file in the indicated folder")
+            raise Exception
 
 
 def output_writer(output_folder, name_folder, output_file):
@@ -149,7 +154,7 @@ class Variables():
         self.domain_iteration = [1, 1.5, 2, 4, 8, 16, 32, 64, 128, 256, 512,
                                  1024, 2048, 4096, 8192, 16384, 32768]  # """ make user defined """
         self.subdomain_length = subdomain_length or [0.1, 0.9]
-        self.pvalue = pvalue or 0.01
+        self.pvalue = pvalue or 0.1
         self.insertion_file_path = insertion_file_path
         self.annotation_file_paths = annotation_file_paths
         self.borders_contig = borders_contig
@@ -160,28 +165,27 @@ class Variables():
         self.annotation_contig = annotation_contig
         self.total_insertions = total_insertions
         self.positive_strand_tn_ratio = positive_strand_tn_ratio
-        self.transposon_motiv_count = transposon_motiv_count
-        self.transposon_motiv_freq = transposon_motiv_freq
-        self.chance_motif_tn = chance_motif_tn
+        self.transposon_motiv_count = transposon_motiv_count or dict()
+        self.transposon_motiv_freq = transposon_motiv_freq or dict()
+        self.chance_motif_tn = chance_motif_tn or dict()
         self.orientation_contig_plus = orientation_contig_plus or dict()
         self.orientation_contig_neg = orientation_contig_neg or dict()
         self.regex_compile, self.di_motivs = self.motif_compiler()
 
-    def normalizer(self):
+    def normalizer(self,contig):
         motif_genome = np.zeros(16)
         # Counts the entire motifv content of the genome; determining the probability of having an insertion in each motif
-        for key in self.genome_seq:
-            atcg = count_GC([self.genome_seq[key]], self.regex_compile)
-            for i, element in enumerate(motif_genome):
-                motif_genome[i] = element + atcg[i]
+        atcg = count_GC([self.genome_seq[contig]], self.regex_compile)
+        for i, element in enumerate(motif_genome):
+            motif_genome[i] = element + atcg[i]
 
         # probability oh having a motif with a transposon in it
-        self.chance_motif_tn = np.divide(
-            self.transposon_motiv_count, motif_genome)
-        for i, entry in enumerate(self.chance_motif_tn):
+        self.chance_motif_tn[contig] = np.divide(
+            self.transposon_motiv_count[contig], motif_genome)
+        for i, entry in enumerate(self.chance_motif_tn[contig]):
             if entry >= 1:
-                self.chance_motif_tn[i] = 0.999999
-        return np.array([[n] for n in self.chance_motif_tn])
+                self.chance_motif_tn[contig][i] = 0.999999
+        return np.array([[n] for n in self.chance_motif_tn[contig]])
 
 
 class Significant:
@@ -189,7 +193,7 @@ class Significant:
     ''' The Significant class is a container for storing information about a 
     gene or domain. It initializes attributes such as domain insertions, 
     p-value, domain length, orientation ratio, orientation p-value, 
-    domain part, and essentiality. Used for the final processing of essentiality'''
+    gene region, and essentiality. Used for the final processing of essentiality'''
 
     def __init__(self, dom_insert=None, pvalue=None, dom_len=None, ratio_orient=None,
                  orient_pvalue=None, domain_part=None, essentiality="Non-Essential"):
@@ -311,7 +315,7 @@ def blast_maker():
     variables.true_positives = tblastn(variables.true_positives)
     variables.true_negatives = tblastn(variables.true_negatives)
     
-    print(f"\nFound {len(variables.true_positives)} benchmark essential genes.\n")
+    print(f"{Fore.BLUE} {datetime.datetime.now().strftime('%c')}{Fore.RESET} [{Fore.GREEN}INFO{Fore.RESET}] Found {len(variables.true_positives)} benchmark essential genes.")
     
     compiled_benchmark = {**variables.true_positives, **variables.true_negatives}
     for gene in compiled_benchmark:
@@ -373,7 +377,7 @@ def gene_insertion_matrix(basket):
 
         return genome_insert_matrix, genome_borders_matrix, genome_orient_plus_matrix, genome_orient_neg_matrix
 
-    print("Compiling insertion matrix")
+    print(f"{Fore.BLUE} {datetime.datetime.now().strftime('%c')}{Fore.RESET} [{Fore.GREEN}INFO{Fore.RESET}] Compiling insertion matrix")
 
     for contig in variables.genome_seq:
         contig_size = len(variables.genome_seq[contig])
@@ -454,7 +458,7 @@ def poisson_binomial(events, motiv_inbox, tn_chance):
         if sucess > np.sum(events):
             sucess = np.sum(events)
         return sucess, p_effective
-
+    
     sucess, p_effective = chance_matrix(events, motiv_inbox, tn_chance)
     pb = PoiBin(p_effective)
 
@@ -508,13 +512,16 @@ def essentials(chunk, variables):
                                                             subdomain_insert_orient_neg_cluster,
                                                             subdomain_insert_orient_pos_cluster)
         chunk[key].significant[domain] = Significant()
-        chunk[key].significant[domain].pvalue = poisson_binomial(
-            domain_motivs, motiv_insertions, variables.chance_motif_tn)  # / (1/sum(domain_motivs))
         chunk[key].significant[domain].dom_insert = sum(motiv_insertions)
         chunk[key].significant[domain].dom_len = sum(domain_motivs)
         chunk[key].significant[domain].ratio_orient = ratio_orientation
         chunk[key].significant[domain].orient_pvalue = orient_pvalue
         chunk[key].significant[domain].domain_part = domain
+        try:
+            chunk[key].significant[domain].pvalue = poisson_binomial(
+                domain_motivs, motiv_insertions, variables.chance_motif_tn[chunk[key].contig])  # / (1/sum(domain_motivs))
+        except Exception as e:
+            print(e,key)
         return chunk
 
     # annexes all the genes which fit the criteria of essentiality
@@ -685,7 +692,8 @@ def basket_storage():
     ''' The basket_storage function forwards the program to the correct annotation
     parser function based on the input annotation file format.'''
 
-    print("Parsing Gene information...")
+    print(f"{Fore.BLUE} {datetime.datetime.now().strftime('%c')}{Fore.RESET} [{Fore.GREEN}INFO{Fore.RESET}] Parsing gene annotations")
+
     file = variables.annotation_file_paths[0]
 
     if variables.annotation_type == "gff":
@@ -789,28 +797,39 @@ def inter_gene_annotater(basket, genes):
                                      identity=ident,
                                      contig=contig)
 
-        if (contig != genes[i+1][-1]) or (i == 0) or (i == len(genes)-2):
+        if contig != genes[i+1][-1]:
 
-            circle_closer = basket[genes[-1][1]].end + variables.ir_size_cutoff
+            circle_closer = basket[gene].end + variables.ir_size_cutoff
             domain_size = len(variables.genome_seq[contig]) - circle_closer
             if domain_size >= 1:
                 count += 1
-                ident = f'IR_{count}_{basket[genes[-1][1]].gene}_{basket[gene].orientation}_contig-end'
+                ident = f'IR_{count}_{basket[gene].gene}_{basket[gene].orientation}_contig_{contig}_-end'
                 basket[ident] = Gene(gene=ident,
-                                     start=basket[genes[-1][1]].end,
+                                     start=basket[gene].end,
                                      end=len(variables.genome_seq[contig]),
                                      identity=ident,
                                      contig=contig)
 
-            domain_size = basket[genes[0][1]].start - variables.ir_size_cutoff
-            if domain_size >= 1:
-                count += 1
-                ident = f'IR_{count}_contig-start_{basket[genes[0][1]].gene}_{basket[genes[0][1]].orientation}'
-                basket[ident] = Gene(gene=ident,
-                                     start=0,
-                                     end=basket[genes[0][1]].start,
-                                     identity=ident,
-                                     contig=contig)
+    circle_closer = basket[genes[-1][1]].end + variables.ir_size_cutoff
+    domain_size = len(variables.genome_seq[contig]) - circle_closer
+    if domain_size > 1:
+        count += 1
+        ident = f'IR_{count}_{basket[gene].gene}_{basket[gene].orientation}_contig_{contig}_-end'
+        basket[ident] = Gene(gene=ident,
+                             start=basket[genes[-1][1]].end,
+                             end=len(variables.genome_seq[contig]),
+                             identity=ident,
+                             contig=contig)
+        
+    domain_size = basket[genes[0][1]].start - variables.ir_size_cutoff
+    if domain_size > 1:
+        count += 1
+        ident = f'IR_{count}_contig_{contig}_-start_{basket[gene].gene}_{basket[genes[0][1]].orientation}'
+        basket[ident] = Gene(gene=ident,
+                             start=0,
+                             end=basket[genes[0][1]].start,
+                             identity=ident,
+                             contig=contig)
     return basket
 
 
@@ -859,7 +878,7 @@ def gene_info_parser_gff(file):
                 break
     
     if len(basket) == 0:
-        print("Watch out, no genomic features were loaded. The gff file is not being parsed correctly.")
+        print(f"{Fore.BLUE} {datetime.datetime.now().strftime('%c')}{Fore.RESET} [{Fore.YELLOW}WARNING{Fore.RESET}] Watch out, no genomic features were loaded. The gff file is not being parsed correctly.")
         
     basket = inter_gene_annotater(basket, genes)
 
@@ -893,7 +912,7 @@ def insertions_parser(startup=True):
         insertions_df["position"].astype(str)+insertions_df["Orientation"]
     insertions_df.drop_duplicates(subset=['unique'], inplace=True)
     if startup:
-        print(f"Total Insertions in library: {len(insertions_df)}")
+        print(f"{Fore.BLUE} {datetime.datetime.now().strftime('%c')}{Fore.RESET} [{Fore.GREEN}INFO{Fore.RESET}] Total Insertions in library: {len(insertions_df)}")
         
     insertions_df.drop(
         ['Read Counts', 'Average mapQ across reads', "unique"], axis=1, inplace=True)
@@ -905,7 +924,7 @@ def insertions_parser(startup=True):
 
     variables.total_insertions = len(insertions_df)
 
-    borders = insertions_df['Transposon Border Sequence'].tolist()
+    #borders = insertions_df['Transposon Border Sequence'].tolist()
     orient_pos = len([n for n in insertions_df["Orientation"] if n == "+"])
     variables.positive_strand_tn_ratio = orient_pos / variables.total_insertions
 
@@ -923,25 +942,30 @@ def insertions_parser(startup=True):
             variables.borders_contig[contig].append(border)
             variables.orientation_contig[contig].append(orientation)
             variables.insertions_contig[contig].append(int(insertion))
-
-    variables.transposon_motiv_count = motiv_compiler(
-        borders, variables.regex_compile)
-    total = sum(variables.transposon_motiv_count)
-
-    variables.transposon_motiv_freq = np.zeros(
-        len(variables.transposon_motiv_count))
-    for i, element in enumerate(variables.transposon_motiv_count):
-        if element != 0:
-            variables.transposon_motiv_freq[i] = round(
-                element / total * 100, 1)
-
-    # calculating the insertion frequency
-    variables.chance_motif_tn = variables.normalizer()
     
-    if startup:
-        print("Transposon insertion frequency (on leading strand):")
-        for tn, mtv in zip(variables.transposon_motiv_freq, variables.di_motivs):
-            print("{}: {}%".format(mtv, tn))
+    contig_df = insertions_df.groupby("#Contig")
+    for (contig,contig_df) in contig_df:
+        borders = contig_df['Transposon Border Sequence'].tolist()
+        
+        variables.transposon_motiv_count[contig] = motiv_compiler(
+            borders, variables.regex_compile)
+        total = sum(variables.transposon_motiv_count[contig]) #total number of insertions in contig
+
+        variables.transposon_motiv_freq[contig] = np.zeros(
+            len(variables.transposon_motiv_count[contig]))
+        for i, element in enumerate(variables.transposon_motiv_count[contig]):
+            if element != 0:
+                variables.transposon_motiv_freq[contig][i] = round(
+                    element / total * 100, 1)
+    
+        # calculating the insertion frequency
+        variables.chance_motif_tn[contig] = variables.normalizer(contig)
+    
+    #if startup:
+    #    print(f"{Fore.BLUE} {datetime.datetime.now().strftime('%c')}{Fore.RESET} [{Fore.GREEN}INFO{Fore.RESET}] Transposon insertion frequency (on leading strand):")
+    #    for contig in variables.transposon_motiv_freq:
+    #        for tn, mtv in zip(variables.transposon_motiv_freq[contig], variables.di_motivs):
+    #            print(f" {Fore.GREEN}{mtv}: {Fore.RESET}{tn}%")
 
 
 def cpu():
@@ -1209,7 +1233,7 @@ def final_compiler(optimal_basket, pvalue, euclidean_points):
     genes_list = [["Total unique Tn insertions"] + ["Essentiality p-value"] +
                   ["Contig"] + ["Gene ID"] + ["Description"] + ["Domain length"] +
                   ["Insertion Orientation ratio (+/total)"] + ["Insertion Orientation p-value"] +
-                  ["Domain part"] + ["Gene Orientation"] + ["Gene name"] + ["Essentiality"]]
+                  ["gene region"] + ["Gene Orientation"] + ["Gene name"] + ["Essentiality"]]
 
     i = 0
     for gene in optimal_basket:
@@ -1219,7 +1243,7 @@ def final_compiler(optimal_basket, pvalue, euclidean_points):
                               [optimal_basket[gene].contig] +
                               [optimal_basket[gene].identity] +
                               [optimal_basket[gene].product] +
-                              [optimal_basket[gene].significant[domain].dom_len] +
+                              [int(optimal_basket[gene].significant[domain].dom_len/2)] +
                               [optimal_basket[gene].significant[domain].ratio_orient] +
                               [optimal_basket[gene].significant[domain].orient_pvalue] +
                               [optimal_basket[gene].significant[domain].domain_part] +
@@ -1263,8 +1287,10 @@ def final_compiler(optimal_basket, pvalue, euclidean_points):
     full_non_e_genes = len(non_essentials_list) - len(intersect)
 
     dic = {}
-    for x, i in zip(variables.transposon_motiv_freq, variables.di_motivs):
-        dic[i] = x
+    for contig in variables.transposon_motiv_freq:
+        dic[contig] = {}
+        for x, i in zip(variables.transposon_motiv_freq[contig], variables.di_motivs):
+            dic[contig][i] = x
 
     genes_list.insert(
         0, ["#Transposon insertion percent bias (+strand): %s" % dic])
@@ -1329,7 +1355,7 @@ def genome_loader(startup=True):
 
         for contig in variables.genome_seq:
             if startup:
-                print(f"Loaded: {contig}")
+                print(f"{Fore.BLUE} {datetime.datetime.now().strftime('%c')}{Fore.RESET} [{Fore.GREEN}INFO{Fore.RESET}] Loaded contig {contig}")
             variables.genome_length += len(variables.genome_seq[contig])
 
     elif variables.annotation_type == "gb":
@@ -1340,7 +1366,7 @@ def genome_loader(startup=True):
             variables.orientation_contig[variables.annotation_contig] = {}
             variables.insertions_contig[variables.annotation_contig] = {}
             if startup:
-                print(f"Loaded: {variables.annotation_contig}")
+                print(f"{Fore.BLUE} {datetime.datetime.now().strftime('%c')}{Fore.RESET} [{Fore.GREEN}INFO{Fore.RESET}] Loaded contig {variables.annotation_contig}")
             variables.genome_seq[variables.annotation_contig] = str(rec.seq)
 
 
@@ -1419,7 +1445,7 @@ def domain_iterator(basket):
         while (current_gap <= variables.biggest_gene) and (i+1 < len(variables.domain_iteration)):
             current_gap = int(variables.genome_length /
                               variables.total_insertions * variables.domain_iteration[i])
-            print(f"Current domain division iteration: {i+1} out {iteration}")
+            print(f"{Fore.BLUE} {datetime.datetime.now().strftime('%c')}{Fore.RESET} [{Fore.GREEN}INFO{Fore.RESET}] Current domain division iteration: {i+1} out {iteration}")
             iterator_store = iterating(
                 i, iterator_store, euclidean_distances, basket, current_gap)
             i += 1
@@ -1429,10 +1455,10 @@ def domain_iterator(basket):
         variables.best_domain_size = sorted_optimal[0][0]
         
     except Exception:
-        print("\nLow saturating library detected\n")
+        print(f"{Fore.BLUE} {datetime.datetime.now().strftime('%c')}{Fore.RESET} [{Fore.YELLOW}WARNING{Fore.RESET}] Low saturating library detected")
         variables.best_domain_size = sorted_optimal[0]
-        
-    print(f"Optimal domain division size: {variables.best_domain_size}bp")
+    
+    print(f"{Fore.BLUE} {datetime.datetime.now().strftime('%c')}{Fore.RESET} [{Fore.GREEN}INFO{Fore.RESET}] Optimal domain division size of {variables.best_domain_size}bp")
     fig, ax1 = plt.subplots()
 
     plt.xlim(0, 1)
@@ -1475,7 +1501,7 @@ def gene_essentiality_compressor(basket,genes_list):
     binned_essentiality = {}
     binned_essentiality_domain = {}
 
-    for gene_name, essential, domain in zip(essentials['Gene ID'], essentials['Essentiality'], essentials['Domain part']):
+    for gene_name, essential, domain in zip(essentials['Gene ID'], essentials['Essentiality'], essentials['gene region']):
         if essential in classifier:
             essential = classifier[essential]
 
@@ -1546,7 +1572,7 @@ def main(argv):
     genome_loader(startup=True)
     insertions_parser(startup=True)
     evaluator_basket = blast_maker()
-    if (len(variables.true_positives) != 0) and (len(variables.true_negatives) != 0):
+    if (len(variables.true_positives) != 0) or (len(variables.true_negatives) != 0):
         evaluator_basket = gene_insertion_matrix(evaluator_basket)
         best_index, pvalue, euclidean_points = domain_iterator(evaluator_basket)
     else:

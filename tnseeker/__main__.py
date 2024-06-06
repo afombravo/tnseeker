@@ -4,6 +4,8 @@ import multiprocessing
 from tnseeker import Essential_Finder,reads_trimer,sam_to_insertions,insertions_over_genome_plotter
 import argparse
 import datetime
+from colorama import Fore
+import pkg_resources
 
 ''' Tnseeker is a pipeline for transposon insertion sequencing (Tn-Seq) analysis. 
     It performs various operations such as trimming the reads, 
@@ -56,21 +58,23 @@ def path_finder_seq(variables):
         os.mkdir(variables["directory"])
      
     if variables["sequencing_files"] == None:
-        print("check that .fastq files exist in the indicated folder.")
+        print(f"\n{Fore.BLUE} {datetime.datetime.now().strftime('%c')}{Fore.RESET} [{Fore.RED}FATAL{Fore.RESET}] check that .fastq files exist in the indicated folder.\n")
+        raise Exception
         
     if variables["fasta"] == None:
-        print("check that .fasta files exist in the indicated folder.")
+        print(f"\n{Fore.BLUE} {datetime.datetime.now().strftime('%c')}{Fore.RESET} [{Fore.RED}FATAL{Fore.RESET}] check that the {variables['strain']}.fasta file exist in the indicated folder.\n")
+        raise Exception
     
     if variables["annotation_type"] == "gb":
         extention = '*.gb'
         if path_finder(variables,extention) == None:
             extention = '*.gbk'
         variables["annotation_file"]=path_finder(variables,extention)
-        variables["seq_file"]=path_finder(variables,extention)
+        variables["genome_file"]=path_finder(variables,extention)
 
     elif variables["annotation_type"] == "gff":
         variables["annotation_file"]=path_finder(variables,'*.gff')
-        variables["seq_file"]=path_finder(variables,'*.fasta')
+        variables["genome_file"]=path_finder(variables,'*.fasta')
 
     return variables
 
@@ -112,7 +116,7 @@ def bowtie_aligner_maker_single(variables):
         subprocess_cmd(send)
         
     else:
-        print(f'Found {variables["directory"]}/alignment.sam, skipping alignment')
+        print(f"{Fore.BLUE} {datetime.datetime.now().strftime('%c')}{Fore.RESET} [{Fore.GREEN}INFO{Fore.RESET}] Found {variables['directory']}/alignment.sam, skipping alignment")
 
     if variables["remove"]:
         os.remove(variables['fastq_trimed'])
@@ -135,7 +139,7 @@ def bowtie_aligner_maker_paired(variables):
         subprocess_cmd(send)
         
     else:
-        print(f'Found {variables["directory"]}/alignment.sam, skipping alignment')
+        print(f"{Fore.BLUE} {datetime.datetime.now().strftime('%c')}{Fore.RESET} [{Fore.GREEN}INFO{Fore.RESET}] Found {variables['directory']}/alignment.sam, skipping alignment")
 
     if variables["remove"]:
         os.remove(variables['fastq_trimed'][0])
@@ -191,8 +195,8 @@ def tn_trimmer_single(variables):
                            f"{variables['trimmed_after_tn']}"])
     
     else:
-        print(f"Found {variables['fastq_trimed']}, skipping trimming")
-    
+        print(f"{Fore.BLUE} {datetime.datetime.now().strftime('%c')}{Fore.RESET} [{Fore.GREEN}INFO{Fore.RESET}] Found {variables['fastq_trimed']}, skipping trimming")
+
     return variables
 
 def tn_trimmer_paired(variables):
@@ -226,7 +230,7 @@ def tn_trimmer_paired(variables):
 
 def sam_parser(variables):
     
-    if not os.path.isfile(f'{variables["directory"]}/{variables["strain"]}.csv'):
+    if not os.path.isfile(f'{variables["directory"]}/all_insertions_{variables["strain"]}.csv'):
 
         sam_to_insertions.main([f"{variables['directory']}",
                                 f"{variables['strain']}",
@@ -237,6 +241,9 @@ def sam_parser(variables):
                                 f"{variables['MAPQ']}",
                                 f"{variables['annotation_file']}",
                                 f"{variables['intergenic_size_cutoff']}"])
+        
+    else:
+        print(f"{Fore.BLUE} {datetime.datetime.now().strftime('%c')}{Fore.RESET} [{Fore.GREEN}INFO{Fore.RESET}] Found all_insertions_{variables['strain']}.csv, skipping tn insertion parsing")
 
 def essentials(variables):
     Essential_Finder.main([f'{variables["directory"]}',
@@ -251,7 +258,7 @@ def essentials(variables):
 
 def insertions_plotter(variables):     
     insertions_over_genome_plotter.main([f'{variables["directory"]}',
-                                         f'{variables["seq_file"]}',
+                                         f'{variables["genome_file"]}',
                                          f'{variables["annotation_type"]}',
                                          f'{variables["strain"]}'])
         
@@ -261,6 +268,47 @@ def subprocess_cmd(command):
     except subprocess.CalledProcessError as e:
         return e.output.decode()
 
+def test_functionalities():
+    result_bowtie = subprocess.run(['bowtie2', '-h'], capture_output=True, text=True)
+    if result_bowtie.returncode == 0:
+        print(f"{Fore.BLUE} {datetime.datetime.now().strftime('%c')} {Fore.RESET}[{Fore.GREEN}INFO{Fore.RESET}] Bowtie2 is working as intended.")
+    else:
+        print(f"{Fore.BLUE} {datetime.datetime.now().strftime('%c')} {Fore.RESET}[{Fore.RED}FATAL{Fore.RESET}] Bowtie2 is not working as intended. Check instalation and/or that it is on path.")
+        
+    result_blast = subprocess.run(['tblastn', '-h'], capture_output=True, text=True)
+    if result_blast.returncode == 0:
+        print(f"{Fore.BLUE} {datetime.datetime.now().strftime('%c')} {Fore.RESET}[{Fore.GREEN}INFO{Fore.RESET}] Blast is working as intended.")
+    else:
+        print(f"{Fore.BLUE} {datetime.datetime.now().strftime('%c')} {Fore.RESET}[{Fore.RED}FATAL{Fore.RESET}] Blast is not working as intended. Check instalation and/or that it is on path.")
+    
+    if (result_blast.returncode == 0) & (result_bowtie.returncode == 0):
+        print(f"{Fore.BLUE} {datetime.datetime.now().strftime('%c')} {Fore.RESET}[{Fore.GREEN}INFO{Fore.RESET}] Testing Tnseeker. Please hold, this might take several minutes.")
+      
+        data_dir = pkg_resources.resource_filename(__name__, 'data/test/')
+        result_full = subprocess.run(["python","-m", "tnseeker", 
+                                        "-s","test",
+                                        "-sd", data_dir,
+                                        "-ad", data_dir,
+                                        "-at", "gb",
+                                        "-st", "SE",
+                                        "--tn", "AGATGTGTATAAGAGACAG",
+                                        "--ph", "10",
+                                        "--mq", "40",
+                                        "--sl5", "0.05", "--sl3", "0.9",
+                                        "--k"], capture_output=True, text=True)
+        
+        if result_full.returncode == 0:
+            print(f"{Fore.BLUE} {datetime.datetime.now().strftime('%c')} {Fore.RESET}[{Fore.GREEN}INFO{Fore.RESET}] Tnseeker is working as intended.")
+        else:
+            print(result_full.stdout)
+            print(result_full.stderr)
+            print(f"{Fore.BLUE} {datetime.datetime.now().strftime('%c')} {Fore.RESET}[{Fore.RED}FATAL{Fore.RESET}] Tnseeker is not working as intended. Check errors.")
+        
+    if (result_blast.returncode == 0) & (result_bowtie.returncode == 0) & (result_full.returncode == 0):
+        print(f"{Fore.BLUE} {datetime.datetime.now().strftime('%c')} {Fore.RESET}[{Fore.GREEN}INFO{Fore.RESET}] All tests passed.")
+
+    print("\n")
+    
 def input_parser(variables):
     
     parser = argparse.ArgumentParser()
@@ -291,21 +339,45 @@ def input_parser(variables):
     parser.add_argument("--pv",nargs='?',const=None,help="Essential Finder pvalue threshold for essentiality determination")
     parser.add_argument("--sl5",nargs='?',const=None,help="5' gene trimming percent for essentiality determination (number between 0 and 1)")
     parser.add_argument("--sl3",nargs='?',const=None,help="3' gene trimming percent for essentiality determination (number between 0 and 1)")
-    
+    parser.add_argument("--tst",nargs='?',const=True,help="Test the program functionalities and instalations")
+
     args = parser.parse_args()
     
-    variables["version"]="1.0.7"
-    print(f'\nVersion: {variables["version"]}\n')
+    #print("\n")
+    #print(f"{Fore.RED} Welcome to{Fore.RESET}")
+    #print(f"{Fore.RED}  _____      {Fore.RESET}____            _             ")
+    #print(f"{Fore.RED} |_   _| __{Fore.RESET} / ___|  ___  ___| | _____ _ __ ")
+    #print(f"{Fore.RED}   | || '_ \{Fore.RESET}\___ \ / _ \/ _ \ |/ / _ \ '__|")
+    #print(f"{Fore.RED}   | || | | |{Fore.RESET}___) |  __/  __/   <  __/ |   ")
+    #print(f"{Fore.RED}   |_||_| |_|{Fore.RESET}____/ \___|\___|_|\_\___|_|   ")
+    #print("\n")     
+                                                                            
+    print("\n")
+    print(f"{Fore.RED} Welcome to{Fore.RESET}")
+    print(f"{Fore.RED} ████████╗███╗   ██╗ {Fore.RESET}███████╗███████╗███████╗██╗  ██╗███████╗██████╗ ")
+    print(f"{Fore.RED} ╚══██╔══╝████╗  ██║ {Fore.RESET}██╔════╝██╔════╝██╔════╝██║ ██╔╝██╔════╝██╔══██╗")
+    print(f"{Fore.RED}    ██║   ██╔██╗ ██║ {Fore.RESET}███████╗█████╗  █████╗  █████╔╝ █████╗  ██████╔╝")
+    print(f"{Fore.RED}    ██║   ██║╚██╗██║ {Fore.RESET}╚════██║██╔══╝  ██╔══╝  ██╔═██╗ ██╔══╝  ██╔══██╗")
+    print(f"{Fore.RED}    ██║   ██║ ╚████║ {Fore.RESET}███████║███████╗███████╗██║  ██╗███████╗██║  ██║")
+    print(f"{Fore.RED}    ╚═╝   ╚═╝  ╚═══╝ {Fore.RESET}╚══════╝╚══════╝╚══════╝╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝")   
     
+    variables["version"]="1.0.7.1"
+    
+    print(f"{Fore.RED}            Version: {Fore.RESET}{variables['version']}")
+    print("\n")  
+    
+    if args.tst is not None:
+        test_functionalities()
+        exit()
+        
     if (args.s is None) or (args.sd is None) or (args.ad is None) or (args.at is None) or (args.st is None):
         print(parser.print_usage())
-        raise ValueError("No arguments given")
+        raise ValueError(f" [{Fore.RED}FATAL{Fore.RESET}] No arguments given")
 
     variables["full"]=True
     if args.e is not None:
         variables["full"] = False
-        print("Running in essentials finder only mode\n")
-        
+
     variables["trim"]=False
     variables["tn_mismatches"] = 0 
     if args.tn is not None:
@@ -317,8 +389,7 @@ def input_parser(variables):
     variables["remove"]=True
     if args.k is False:
         variables["remove"]=False
-        print("Keeping all intermediate files\n")
-        
+
     variables["trimmed_after_tn"]=-1
     if args.t is not None:
         variables["trimmed_after_tn"]=int(args.t)
@@ -326,8 +397,7 @@ def input_parser(variables):
     variables["barcode"]=False
     if args.b is not None:
         variables["barcode"] = True
-        print("Running with barcode finding\n")
-        
+
     variables["intergenic_size_cutoff"]=0
     if args.ig is not None:
         variables["intergenic_size_cutoff"] = int(args.ig)
@@ -371,9 +441,8 @@ def input_parser(variables):
     variables["essential_find"]=True
     if args.ne is not None:
         variables["essential_find"]=False
-        print("Running without essential finding\n")
-        
-    variables["pvalue"]=0.01
+
+    variables["pvalue"]=0.1
     if args.pv is not None:
         variables["pvalue"]=args.pv
         
@@ -408,44 +477,47 @@ def variables_initializer():
     variables = input_parser(variables)
     variables = path_finder_seq(variables)
     cmd_printer_path = os.path.join(variables['directory'],'cmd_input' + ".txt")
+    
+    print(f"{Fore.YELLOW} -- Parameters -- {Fore.RESET}\n")
     with open(cmd_printer_path,'w+') as current:
         for key in variables:
-            current.write(str(key)+':'+str(variables[key])+'\n')
+            current.write(str(key)+' : '+str(variables[key])+'\n')
+            print(f"{Fore.GREEN} {key}:{Fore.RESET} {variables[key]}")
+    print(f"\n{Fore.YELLOW} ---- {Fore.RESET}\n")
     return variables
 
 def main():
-    print(f"\nStarting at: {datetime.datetime.now().strftime('%c')}")
-    
+
     variables = variables_initializer()
     
     if variables["full"]:
         variables = bowtie_index_maker(variables)
-
+        
         if variables["seq_type"] == "PE":
-            
-            print("Running in paired-end mode")
+
             variables["fastq_trimed"] = [variables['sequencing_files'],\
                                          variables['sequencing_files_r']]
             if variables["trim"]:
+                print(f"{Fore.BLUE} {datetime.datetime.now().strftime('%c')} {Fore.RESET}[{Fore.GREEN}INFO{Fore.RESET}] Getting that .fastq ready")
                 variables = tn_trimmer_paired(variables)
-
-            print("Aligning Sequences")
+            
+            print(f"{Fore.BLUE} {datetime.datetime.now().strftime('%c')} {Fore.RESET}[{Fore.GREEN}INFO{Fore.RESET}] Aligning reads to the reference genome")
             bowtie_aligner_maker_paired(variables)
             
         elif variables["seq_type"] == "SE":
-            
-            print("Running in single-end mode")
+
             variables["fastq_trimed"] = variables['sequencing_files']
 
             if variables["trim"]:
+                print(f"{Fore.BLUE} {datetime.datetime.now().strftime('%c')} {Fore.RESET}[{Fore.GREEN}INFO{Fore.RESET}] Getting that .fastq ready")
                 variables = tn_trimmer_single(variables)
             else:
+                print(f"{Fore.BLUE} {datetime.datetime.now().strftime('%c')} {Fore.RESET}[{Fore.GREEN}INFO{Fore.RESET}] Compiling those .fastq")
                 variables = tn_compiler(variables)
-                
-            print("Aligning Sequences")
+            
+            print(f"{Fore.BLUE} {datetime.datetime.now().strftime('%c')} {Fore.RESET}[{Fore.GREEN}INFO{Fore.RESET}] Aligning reads to the reference genome")
             bowtie_aligner_maker_single(variables)
         
-        print("Parsing insertions")
         sam_parser(variables)
         if variables["remove"]:
             if variables["barcode"]:
@@ -455,10 +527,10 @@ def main():
         insertions_plotter(variables)
     
     if variables["essential_find"]:
-        print("Finding Essentials")
+        print(f"{Fore.BLUE} {datetime.datetime.now().strftime('%c')}{Fore.RESET} [{Fore.GREEN}INFO{Fore.RESET}] Infering essential genes")
         essentials(variables)
-        
-    print(f"Ended on: {datetime.datetime.now().strftime('%c')}")
+    
+    print(f"{Fore.BLUE} {datetime.datetime.now().strftime('%c')} {Fore.RESET}[{Fore.GREEN}INFO{Fore.RESET}] Analysis Finished")
     
 if __name__ == "__main__":
     main() 
