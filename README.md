@@ -11,6 +11,7 @@ The tnseeker pipeline requires Python3, Bowtie2, and BLAST, to be callable from 
 
 ### For bowtie2
 `sudo apt update`
+
 `sudo apt install bowtie2`
 
 ## Tnseeker 
