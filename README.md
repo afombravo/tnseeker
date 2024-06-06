@@ -5,20 +5,16 @@ Tnseeker is under active developement and is available as is. Contact me if you 
 
 ## Requirements
 The tnseeker pipeline requires Python3, Bowtie2, and BLAST, to be callable from the terminal (and added to path). 
-Tnseeker also requires several python dependencies, all automatically installed. A notable exception is the poibin module, which is available in the current tnseeker folder (you as the user don't need to do anything), and can be originally be found here: https://github.com/tsakim/poibin
 
-## Instalation
-`sudo apt update`
-
-#### For local BLAST
+### For local BLAST
 `sudo apt install ncbi-blast+`
 
-#### For bowtie2
-`sudo apt install bowtie2=2.4.4-1`
+### For bowtie2
+`sudo apt update`
+`sudo apt install bowtie2`
 
-#### Tnseeker 
-Tnseeker requires Python>=3.9 installed.
-Tnseeker can then be installed as a PyPI module with the folowing:
+## Tnseeker 
+tnseeker can be installed as PyPI module with the folowing:
 
 `pip install tnseeker`
 
@@ -27,6 +23,10 @@ Tnseeker can then be installed as a PyPI module with the folowing:
 tnseeker is executable from the command line by typing:
 
 `python -m tnseeker`
+
+Tnseeker also has a test mode, where the blast, Bowtie2 instalations are tested, and a small run on a test dataset is performed.
+
+`python -m tnseeker --tst`
 
 An example use case is the folowing. See below the meaning of the input arguments:
 
@@ -49,6 +49,8 @@ An example use case is the folowing. See below the meaning of the input argument
   -at AT       Annotation Type (Genbank)
 
   -st ST       Sequencing type (Paired-ended (PE)/Single-ended(SE)
+
+  --tst [TST]  Test mode to confirm everything works as expected.
 
   --tn [TN]    Transposon border sequence (tn5: GATGTGTATAAGAGACAG). Required for triming and proper mapping
 
@@ -103,6 +105,10 @@ An example use case is the folowing. See below the meaning of the input argument
   --sl3 [SL3]  3' gene trimming percent for essentiality determination (number
                between 0 and 1)
                
+## Dependencies
+
+tnseeker requires several dependencies, all automatically instalable
+A notable exception is the poibin module, which is available in the current tnseeker folder (you as the user don't need to do anything else), and can be originally be found here: https://github.com/tsakim/poibin
 
 ### File requirements
 
