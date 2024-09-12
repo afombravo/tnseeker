@@ -33,7 +33,8 @@ setup(
                            "pathlib == 1.0.1",
                            "scipy == 1.12.0",
                            "seaborn == 0.13.2",
-                           "statsmodels == 0.14.1"],
+                           "statsmodels == 0.14.1",
+                           "colorama"],
         
         keywords=['tn-seq', 'essentiality','rb-seq'],
         classifiers= [
