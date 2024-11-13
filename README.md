@@ -12,7 +12,7 @@ There are two ways of installing tnseeker:
 2.  Download the dockerfile available in this repo
 3.  Start tnseeker with the comand: `docker run tnseeker python -m tnseeker <YOUR TNSEEKER CMD HERE>`
 
-
+---
 ### LESS OPTIMAL INSTALATION METHOD
 The tnseeker pipeline requires Python3, Bowtie2, and BLAST, to be callable from the terminal (and added to path). 
 
@@ -29,6 +29,7 @@ tnseeker can be installed as PyPI module with the folowing:
 
 `pip install tnseeker`
 
+---
 ## Executing 
 
 tnseeker is executable from the command line by typing:
@@ -115,12 +116,14 @@ An example use case is the folowing. See below the meaning of the input argument
 
   --sl3 [SL3]  3' gene trimming percent for essentiality determination (number
                between 0 and 1)
-               
-## Dependencies
+
+---
+## Python Dependencies
 
 tnseeker requires several dependencies, all automatically instalable
 A notable exception is the poibin module, which is available in the current tnseeker folder (you as the user don't need to do anything else), and can be originally be found here: https://github.com/tsakim/poibin
 
+---
 ### File requirements
 
 tnseeker requires several input files:
@@ -131,7 +134,7 @@ tnseeker requires several input files:
  
  3. A FASTA file with the genome under analysis.
 
-
+---
 ### Working modes
 
 tnseeker is composed of 2 submodules: 
