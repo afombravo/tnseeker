@@ -1,3 +1,10 @@
+<div align="center">
+	
+![PyPI](https://img.shields.io/pypi/v/tnseeker.svg)
+![PyPI - Downloads](https://img.shields.io/pypi/dm/tnseeker.svg)
+
+</div>
+
 # Tnseeker
 Tnseeker is an advanced pipeline tailored for transposon insertion sequencing (Tn-Seq) analysis. It performs an array of tasks: from read trimming and alignment to associating genomic locations with transposon insertions and inferring essential genes based on transposon insertion densities. Additionally, Tnseeker is adept at extracting barcodes from raw fastq files and linking them to corresponding transposon genomic locations for subsequent analysis. What truly distinguishes Tnseeker from other tools is its unique capability to automatically infer and adjust threshold/cutoff parameters. This negates the need for intricate user input, allowing for a more precise determination of gene essentiality based on the data. Compatible with any transposon disruption experiment, Tnseeker efficiently mitigates transposon-specific biases, including those seen with HIMAR. Hence, Tnseeker is versatile enough to handle all Tn-Seq datasets.
 
@@ -9,7 +16,7 @@ There are two ways of installing tnseeker:
 
 ### 1. BEST INSTALATION METHOD
 1.  Install docker in your system
-2.  Download the dockerfile available in this repo
+2.  Download the dockerfile available in this repo (note: The used tnseeker version is the one available on PyPI)
 3.  Start tnseeker with the comand: `docker run tnseeker python -m tnseeker <YOUR TNSEEKER CMD HERE>`
 
 ---
