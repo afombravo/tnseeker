@@ -15,5 +15,5 @@ COPY . /app
 # Install Python dependencies
 RUN pip install tnseeker --no-cache-dir
 
-# Run tnseeker module by default
+# wait for cmd input
 CMD ["bash"]
