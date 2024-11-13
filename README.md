@@ -3,7 +3,17 @@ Tnseeker is an advanced pipeline tailored for transposon insertion sequencing (T
 
 Tnseeker is under active developement and is available as is. Contact me if you are interested in using the program or have any questions. Bugs can be expected. Please report any weird or unintented behaviour. 
 
-## Requirements
+## Instalation 
+There are two ways of installing tnseeker:
+
+
+### BEST INSTALATION METHOD
+1.  Install docker in your system
+2.  Download the dockerfile available in this repo
+3.  Start tnseeker with the comand: `docker run tnseeker python -m tnseeker <YOUR TNSEEKER CMD HERE>`
+
+
+### LESS OPTIMAL INSTALATION METHOD
 The tnseeker pipeline requires Python3, Bowtie2, and BLAST, to be callable from the terminal (and added to path). 
 
 ### For local BLAST
@@ -14,16 +24,7 @@ The tnseeker pipeline requires Python3, Bowtie2, and BLAST, to be callable from 
 
 `sudo apt install bowtie2`
 
-## Tnseeker 
-There are two wayf of installing tnseeker:
-
-### BEST INSTALATION METHOD
-1.  Install docker in your system
-2.  Download the dockerfile available in this repo
-3.  Start tnseeker with the comand: `docker run tnseeker python -m tnseeker <YOUR TNSEEKER CMD HERE>`
-
-
-### LESS OPTIMAL INSTALATION METHOD
+### PyPI module
 tnseeker can be installed as PyPI module with the folowing:
 
 `pip install tnseeker`
