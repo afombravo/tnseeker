@@ -15,6 +15,15 @@ The tnseeker pipeline requires Python3, Bowtie2, and BLAST, to be callable from 
 `sudo apt install bowtie2`
 
 ## Tnseeker 
+There are two wayf of installing tnseeker:
+
+### BEST INSTALATION METHOD
+1.  Install docker in your system
+2.  Download the dockerfile available in this repo
+3.  Start tnseeker with the comand: `docker run tnseeker python -m tnseeker <YOUR TNSEEKER CMD HERE>`
+
+
+### LESS OPTIMAL INSTALATION METHOD
 tnseeker can be installed as PyPI module with the folowing:
 
 `pip install tnseeker`
