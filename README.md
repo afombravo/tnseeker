@@ -38,17 +38,21 @@ NOTE: all files required by tnseeker, such as .fasta, .fastq, .gb, or .gff, need
 The tnseeker pipeline requires Python3, Bowtie2, and BLAST, to be callable from the terminal (and added to path). 
 
 ### For local BLAST
-`sudo apt install ncbi-blast+`
+```bash
+apt update
+apt install ncbi-blast+
+```
 
 ### For bowtie2
-`sudo apt update`
-
-`sudo apt install bowtie2`
+```bash
+apt install bowtie2
+```
 
 ### PyPI module
 tnseeker can be installed as PyPI module with the folowing:
-
-`pip install tnseeker`
+```bash
+pip install tnseeker
+```
 
 ---
 ## Executing 
