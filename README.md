@@ -37,37 +37,42 @@ NOTE: all files required by tnseeker, such as .fasta, .fastq, .gb, or .gff, need
 ### 2. LESS OPTIMAL INSTALATION METHOD
 The tnseeker pipeline requires Python3, Bowtie2, and BLAST, to be callable from the terminal (and added to path). 
 
-### For local BLAST
+#### For local BLAST
 ```bash
 apt update
 apt install ncbi-blast+
 ```
 
-### For bowtie2
+#### For bowtie2
 ```bash
 apt install bowtie2
 ```
 
-### PyPI module
+#### PyPI module
 tnseeker can be installed as PyPI module with the folowing:
 ```bash
 pip install tnseeker
 ```
 
----
-## Executing 
-
 tnseeker is executable from the command line by typing:
 
+```bash
 `python -m tnseeker`
+```
+---
+### Executing 
 
 Tnseeker also has a test mode, where the blast, Bowtie2 instalations are tested, and a small run on a test dataset is performed.
 
-`python -m tnseeker --tst`
+```bash
+python -m tnseeker --tst
+```
 
 An example use case is the folowing. See below the meaning of the input arguments:
 
-`python -m tnseeker -s BW25113 -sd '/your/data/directory/folder_with_fastq.gz_files' -ad /your/annotations/directory/ -at gb -st SE --tn AGATGTGTATAAGAGACAG --ph 10 --mq 40`
+```bash
+python -m tnseeker -s BW25113 -sd ./ -ad ./ -at gb -st SE --tn AGATGTGTATAAGAGACAG --ph 10 --mq 40
+```
 
 ## Optional Arguments:
 
