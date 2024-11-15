@@ -21,11 +21,11 @@ There are two ways of installing tnseeker:
 ```bash
 docker build --no-cache -t tnseeker .
 ```
-5.  Start tnseeker docker image with the comand:
+4.  Start tnseeker docker image with the comand:
 ```bash
-docker run -it -v <local_path/to/all/your/data>:/data" tnseeker
+docker run -it -v "<local_path/to/all/your/data>:/data" tnseeker
 ```
-7.  Start tnseeker with:
+5.  Start tnseeker with:
 ```bash
 python -m tnseeker -sd ./ -ad ./ <ALL OTHER TNSEEKER COMANDS HERE>
 ```
