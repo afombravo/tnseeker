@@ -17,9 +17,21 @@ There are two ways of installing tnseeker:
 ### 1. BEST INSTALATION METHOD
 1.  Install docker in your system
 2.  Download the dockerfile available in this repo (note: The used tnseeker version is the one available on PyPI)
-3.  Go to the dockerfile folder and Build the docker image ```bash docker build --no-cache -t tnseeker .```
-5.  Start tnseeker docker image with the comand: `docker run -it -v <local_path/to/all/your/data>:/data" tnseeker`
-6.  Start tnseeker with `python -m tnseeker -sd ./ -ad ./ <ALL OTHER TNSEEKER COMANDS HERE>` (NOTE: all files required by tnseeker, such as .fasta, .fastq, .gb, or .gff, need to be in the local folder indicated in 4. You then can use the -sd and -ad flags as indicated here in 5.)
+3.  Go to the dockerfile folder and build the docker image:
+```bash
+docker build --no-cache -t tnseeker .
+```
+5.  Start tnseeker docker image with the comand:
+```bash
+docker run -it -v <local_path/to/all/your/data>:/data" tnseeker
+```
+7.  Start tnseeker with:
+```bash
+python -m tnseeker -sd ./ -ad ./ <ALL OTHER TNSEEKER COMANDS HERE>
+```
+
+NOTE: all files required by tnseeker, such as .fasta, .fastq, .gb, or .gff, need to be in the local folder indicated in 4. You then can use the -sd and -ad flags as indicated here in 5.
+
 
 ---
 ### 2. LESS OPTIMAL INSTALATION METHOD
