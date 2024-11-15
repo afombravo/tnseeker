@@ -2,18 +2,19 @@
 FROM python:3.10-slim
 
 # Set the working directory in the container
-WORKDIR /app
+WORKDIR /data
 
 # Install system dependencies
-RUN apt update && \
-    apt install -y ncbi-blast+ bowtie2 && \
+RUN apt-get update && \
+    apt-get install -y ncbi-blast+ && \
+    apt-get install -y bowtie2 && \
     rm -rf /var/lib/apt/lists/*
 
 # Copy the current directory contents into the container at /app
-COPY . /app
+COPY . /data
 
-# Install Python dependencies
+# Install tnseeker from PyPI
 RUN pip install tnseeker --no-cache-dir
 
-# wait for cmd input
+# Run tnseeker module by default
 CMD ["bash"]
