@@ -57,7 +57,7 @@ pip install tnseeker
 tnseeker is executable from the command line by typing:
 
 ```bash
-`python -m tnseeker`
+python -m tnseeker
 ```
 ---
 ### Executing 
