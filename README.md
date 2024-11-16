@@ -81,7 +81,7 @@ tnseeker requires several input files:
 
  1. A '.fastq.gz' file (needs to be .gz)
  
- 2. An annotation file in genbank format (.gb), or a .gff
+ 2. An annotation file in genbank format (.gb), or a .gff (there is an example gff format file in this repo)
  
  3. A FASTA file with the genome under analysis.
 
