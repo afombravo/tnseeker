@@ -5,13 +5,12 @@ this_directory = path.abspath(path.dirname(__file__))
 with open(path.join(this_directory, 'README.md'), encoding='utf-8') as f:
     long_description = f.read()
 
-VERSION = '1.0.7' 
+VERSION = '1.0.7.2' 
 DESCRIPTION = 'TnSeeker'
 LONG_DESCRIPTION = 'Versatile Python3 module for processing and analyzing anything related with Tn-Seq. Requires bowtie2 to be callable from terminal. File wise, only fastq and genbank annotation files are required.'
 
-# Setting up
 setup(
-       # the name must match the folder name 'verysimplemodule'
+       # the name must match the folder name 
         name="tnseeker", 
         version=VERSION,
         author="Afonso M Bravo",
@@ -36,6 +35,12 @@ setup(
                            "statsmodels == 0.14.1",
                            "colorama"],
         
+        entry_points={
+        'console_scripts': [
+            'tnseeker=tnseeker.__main__:main',  # Replace `2fast2q` with the command name you want to use
+            ],
+        },
+
         keywords=['tn-seq', 'essentiality','rb-seq'],
         classifiers= [
             "Development Status :: 3 - Alpha", #change here for when the product is more finished
@@ -44,5 +49,5 @@ setup(
             "Operating System :: OS Independent",
         ],
         include_package_data=True,
-        package_data={'': ['data/*']},
+        package_data={'': ['data/*','data/test/*']},
 )
