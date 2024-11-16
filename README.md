@@ -61,7 +61,7 @@ tnseeker
 ```
 
 ---
-### Running Tnseeker
+## Running Tnseeker
 
 Tnseeker also has a test mode, where the blast, Bowtie2 instalations are tested, and a small run on a test dataset is performed.
 
@@ -74,7 +74,19 @@ An example use case is the folowing. See below the meaning of the input argument
 ```bash
 tnseeker -s BW25113 -sd ./ -ad ./ -at gb -st SE --tn AGATGTGTATAAGAGACAG --ph 10 --mq 40
 ```
+
+### File requirements
+
+tnseeker requires several input files:
+
+ 1. A '.fastq.gz' file (needs to be .gz)
+ 
+ 2. An annotation file in genbank format (.gb), or a .gff
+ 
+ 3. A FASTA file with the genome under analysis.
+
 ---
+
 
 ## Optional Arguments:
 
@@ -155,16 +167,6 @@ tnseeker -s BW25113 -sd ./ -ad ./ -at gb -st SE --tn AGATGTGTATAAGAGACAG --ph 10
 tnseeker requires several dependencies, all automatically instalable
 A notable exception is the poibin module, which is available in the current tnseeker folder (you as the user don't need to do anything else), and can be originally be found here: https://github.com/tsakim/poibin
 
----
-### File requirements
-
-tnseeker requires several input files:
-
- 1. A '.fastq.gz' file (needs to be .gz)
- 
- 2. An annotation file in genbank format (.gb), or a .gff
- 
- 3. A FASTA file with the genome under analysis.
 
 ---
 ### Working modes
