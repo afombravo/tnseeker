@@ -27,7 +27,7 @@ docker run -it -v "<local_path/to/all/your/data>:/data" tnseeker
 ```
 5.  Start tnseeker with:
 ```bash
-python -m tnseeker -sd ./ -ad ./ <ALL OTHER TNSEEKER COMANDS HERE>
+tnseeker -sd ./ -ad ./ <ALL OTHER TNSEEKER COMANDS HERE>
 ```
 
 NOTE: all files required by tnseeker, such as .fasta, .fastq, .gb, or .gff, need to be in the local folder indicated in 4. You then can use the -sd and -ad flags as indicated here in 5.
@@ -57,7 +57,7 @@ pip install tnseeker
 tnseeker is executable from the command line by typing:
 
 ```bash
-python -m tnseeker
+tnseeker
 ```
 ---
 ### Executing 
@@ -65,13 +65,13 @@ python -m tnseeker
 Tnseeker also has a test mode, where the blast, Bowtie2 instalations are tested, and a small run on a test dataset is performed.
 
 ```bash
-python -m tnseeker --tst
+tnseeker --tst
 ```
 
 An example use case is the folowing. See below the meaning of the input arguments:
 
 ```bash
-python -m tnseeker -s BW25113 -sd ./ -ad ./ -at gb -st SE --tn AGATGTGTATAAGAGACAG --ph 10 --mq 40
+tnseeker -s BW25113 -sd ./ -ad ./ -at gb -st SE --tn AGATGTGTATAAGAGACAG --ph 10 --mq 40
 ```
 
 ## Optional Arguments:
