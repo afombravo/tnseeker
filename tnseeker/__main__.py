@@ -1,7 +1,7 @@
 import os,glob
 import subprocess
 import multiprocessing
-from tnseeker import Essential_Finder,reads_trimer,sam_to_insertions,insertions_over_genome_plotter
+from tnseeker import Essential_Finder,reads_trimer,sam_to_insertions,insertions_over_genome_plotter # type: ignore
 import argparse
 import datetime
 from colorama import Fore
@@ -76,6 +76,10 @@ def path_finder_seq(variables):
         variables["annotation_file"]=path_finder(variables,'*.gff')
         variables["genome_file"]=path_finder(variables,'*.fasta')
 
+    if variables["annotation_file"] == None:
+        print(f"\n{Fore.BLUE} {datetime.datetime.now().strftime('%c')}{Fore.RESET} [{Fore.RED}FATAL{Fore.RESET}] check that the annotation file exists in the indicated folder.\n")
+        raise Exception
+
     return variables
 
 def cpu():
@@ -88,14 +92,14 @@ def cpu():
 def bowtie_index_maker(variables):
     
     variables["index_dir"] = f"{variables['directory']}/indexes/"
+
     if not os.path.isdir(variables["index_dir"]):
         os.mkdir(variables["index_dir"])
             
         send = ["bowtie2-build",
-                f"{variables['fasta']}",
-                f"{variables['index_dir']}{variables['strain']}",
-                f"2>{variables['directory']}/bowtie_index_log.log"]
-        
+                variables['fasta'],
+                f"{variables['index_dir']}{variables['strain']}"]
+
         subprocess_cmd(send)
     return variables
     
@@ -361,7 +365,7 @@ def input_parser(variables):
     print(f"{Fore.RED}    ██║   ██║ ╚████║ {Fore.RESET}███████║███████╗███████╗██║  ██╗███████╗██║  ██║")
     print(f"{Fore.RED}    ╚═╝   ╚═╝  ╚═══╝ {Fore.RESET}╚══════╝╚══════╝╚══════╝╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝")   
     
-    variables["version"]="1.0.7.1"
+    variables["version"]="1.0.7.2"
     
     print(f"{Fore.RED}            Version: {Fore.RESET}{variables['version']}")
     print("\n")  
@@ -411,9 +415,9 @@ def input_parser(variables):
     if variables["barcode"]:
 
         if args.b1p is not None:
-            variables["barcode_down_phred"] = int(args.b2p)
-            if variables["barcode_down_phred"] < 1:
-                variables["barcode_down_phred"]  = 1
+            variables["barcode_up_phred"] = int(args.b2p)
+            if variables["barcode_up_phred"] < 1:
+                variables["barcode_up_phred"]  = 1
                 
         if args.b2p is not None:
             variables["barcode_down_phred"] = int(args.b2p)
