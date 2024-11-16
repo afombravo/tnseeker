@@ -59,8 +59,9 @@ tnseeker is executable from the command line by typing:
 ```bash
 tnseeker
 ```
+
 ---
-### Executing 
+### Running Tnseeker
 
 Tnseeker also has a test mode, where the blast, Bowtie2 instalations are tested, and a small run on a test dataset is performed.
 
@@ -73,6 +74,7 @@ An example use case is the folowing. See below the meaning of the input argument
 ```bash
 tnseeker -s BW25113 -sd ./ -ad ./ -at gb -st SE --tn AGATGTGTATAAGAGACAG --ph 10 --mq 40
 ```
+---
 
 ## Optional Arguments:
 
