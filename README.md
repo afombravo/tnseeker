@@ -16,8 +16,15 @@ There are two ways of installing tnseeker:
 
 ### 1. BEST INSTALATION METHOD
 1.  Install docker in your system
-2.  Download the dockerfile available in this repo (note: The used tnseeker version is the one available on PyPI)
-3.  Go to the dockerfile folder and build the docker image:
+2.  Download the docker image from dockerhub
+```bash
+   docker pull afombravo/tnseeker:latest
+```
+3.  Rename to just tnseeker
+```bash
+    docker tag afombravo/tnseeker:latest tnseeker
+```
+Alternatively, download the docker file from this repo and build it yourself.
 ```bash
 docker build --no-cache -t tnseeker .
 ```
