@@ -6,7 +6,17 @@
 </div>
 
 # Tnseeker
-Tnseeker is an advanced pipeline tailored for transposon insertion sequencing (Tn-Seq) analysis. It performs an array of tasks: from read trimming and alignment to associating genomic locations with transposon insertions and inferring essential genes based on transposon insertion densities. Additionally, Tnseeker is adept at extracting barcodes from raw fastq files and linking them to corresponding transposon genomic locations for subsequent analysis. What truly distinguishes Tnseeker from other tools is its unique capability to automatically infer and adjust threshold/cutoff parameters. This negates the need for intricate user input, allowing for a more precise determination of gene essentiality based on the data. Compatible with any transposon disruption experiment, Tnseeker efficiently mitigates transposon-specific biases, including those seen with HIMAR. Hence, Tnseeker is versatile enough to handle all Tn-Seq datasets.
+Tnseeker is an advanced pipeline tailored for transposon insertion sequencing (Tn-Seq) analysis. 
+
+It performs an array of tasks: 
+1. Read trimming based on the presence of transposon sequences & extraction of associated linked barcodes
+2. Alignment to reference genome (bowtie2)
+3. Links genomic locations (using .gff or .gb files as input) with transposon insertion locations
+4. Infer essential genes based on global and local (contig wise) transposon insertion densities
+
+What truly distinguishes Tnseeker from other tools is its unique capability to automatically infer and adjust threshold/cutoff parameters. This negates the need for intricate user input, allowing for a more precise determination of gene essentiality based on the data. 
+
+Tnseeker is also compatible with any transposon disruption experiment. Be it Tn5, HIMAR, or anything else. Hence, Tnseeker is versatile enough to handle all Tn-Seq datasets.
 
 Tnseeker is under active developement and is available as is. Contact me if you are interested in using the program or have any questions. Bugs can be expected. Please report any weird or unintented behaviour. 
 
