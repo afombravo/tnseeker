@@ -18,11 +18,11 @@ There are two ways of installing tnseeker:
 1.  Install docker in your system
 2.  Download the docker image from dockerhub
 ```bash
-   docker pull afombravo/tnseeker:latest
+docker pull afombravo/tnseeker:latest
 ```
 3.  Rename to just tnseeker
 ```bash
-    docker tag afombravo/tnseeker:latest tnseeker
+docker tag afombravo/tnseeker:latest tnseeker
 ```
 Alternatively, download the docker file from this repo and build it yourself.
 ```bash
