@@ -1,7 +1,9 @@
 <div align="center">
-	
+
+![Maintenance](https://img.shields.io/maintenance/yes/2024)
 ![PyPI](https://img.shields.io/pypi/v/tnseeker.svg)
-![Docker Image Version (tag)](https://img.shields.io/docker/v/:afombravo/:tnseeker/:latest)
+![Docker Image Version (latest by date)](https://img.shields.io/docker/v/afombravo/tnseeker/latest)
+![Docker Pulls](https://img.shields.io/docker/pulls/afombravo/tnseeker)
 
 </div>
 
