@@ -1,7 +1,7 @@
 <div align="center">
 	
 ![PyPI](https://img.shields.io/pypi/v/tnseeker.svg)
-![PyPI - Downloads](https://img.shields.io/pypi/dm/tnseeker.svg)
+![Docker Image Version (tag)](https://img.shields.io/docker/v/:afombravo/:tnseeker/:latest)
 
 </div>
 

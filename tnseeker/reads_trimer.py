@@ -209,7 +209,7 @@ def extractor(fastq,folder_path,sequences,barcode,barcode_upstream,barcode_downs
         write(trimmed, "/processed_reads_1.fastq", folder_path)
     else:
         trimmed,barcodes=read_trimer(read_bucket,transposon_seq,quality_set,mismatches,trimming_len,miss_up,miss_down,
-                                     quality_set_bar_up,quality_set_bar_down,borders, True)
+                                     quality_set_bar_up,quality_set_bar_down,borders,True)
         write(trimmed, "/processed_reads_1.fastq", folder_path)
         write(barcodes, "/barcodes_1.txt", folder_path)
     count_trimed+=len(trimmed)
