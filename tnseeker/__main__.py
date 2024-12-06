@@ -113,7 +113,7 @@ def bowtie_aligner_maker_single(variables):
                 "-x",f"{variables['index_dir']}{variables['strain']}",
                 "-U",f"{variables['fastq_trimed']}",
                 "-S",f"{variables['directory']}/alignment.sam",
-               # "--no-unal",
+                "--no-unal",
                 f"--threads {cpus}",
                 f"2>'{variables['directory']}/bowtie_align_log.log'"]
         
@@ -136,7 +136,7 @@ def bowtie_aligner_maker_paired(variables):
                 "-1",f"{variables['fastq_trimed'][0]}",
                 "-2",f"{variables['fastq_trimed'][1]}",
                 "-S",f"{variables['directory']}/alignment.sam",
-                #"--no-unal",
+                "--no-unal",
                 f"--threads {cpus}",
                 f"2>'{variables['directory']}/bowtie_align_log.log'"]
         
@@ -346,16 +346,7 @@ def input_parser(variables):
     parser.add_argument("--tst",nargs='?',const=True,help="Test the program functionalities and instalations")
 
     args = parser.parse_args()
-    
-    #print("\n")
-    #print(f"{Fore.RED} Welcome to{Fore.RESET}")
-    #print(f"{Fore.RED}  _____      {Fore.RESET}____            _             ")
-    #print(f"{Fore.RED} |_   _| __{Fore.RESET} / ___|  ___  ___| | _____ _ __ ")
-    #print(f"{Fore.RED}   | || '_ \{Fore.RESET}\___ \ / _ \/ _ \ |/ / _ \ '__|")
-    #print(f"{Fore.RED}   | || | | |{Fore.RESET}___) |  __/  __/   <  __/ |   ")
-    #print(f"{Fore.RED}   |_||_| |_|{Fore.RESET}____/ \___|\___|_|\_\___|_|   ")
-    #print("\n")     
-                                                                            
+                                                             
     print("\n")
     print(f"{Fore.RED} Welcome to{Fore.RESET}")
     print(f"{Fore.RED} ████████╗███╗   ██╗ {Fore.RESET}███████╗███████╗███████╗██╗  ██╗███████╗██████╗ ")
@@ -365,7 +356,7 @@ def input_parser(variables):
     print(f"{Fore.RED}    ██║   ██║ ╚████║ {Fore.RESET}███████║███████╗███████╗██║  ██╗███████╗██║  ██║")
     print(f"{Fore.RED}    ╚═╝   ╚═╝  ╚═══╝ {Fore.RESET}╚══════╝╚══════╝╚══════╝╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝")   
     
-    variables["version"]="1.0.7.2"
+    variables["version"]="1.0.7.3"
     
     print(f"{Fore.RED}            Version: {Fore.RESET}{variables['version']}")
     print("\n")  

@@ -108,15 +108,12 @@ def plotter(directory,annotation,anno_type,strain):
     ax.remove()
     grid = plt.GridSpec(1, 5, wspace=0.4, hspace=0.3)
     ax=plt.subplot(grid[0, :4])
-    ax.set_ylim(1, 1000000)
+    max_y_value = 0
     incremental_position=0
     genome_seq={k: v for k, v in sorted(genome_seq.items(), reverse=True,key=lambda item: item[1])}
     
     for i,contig in enumerate(genome_seq):
-        
-        #plt.plot([incremental_position,genome_seq[contig]+incremental_position],[10,10],linewidth=5)
-        plt.fill_between([incremental_position,genome_seq[contig]+incremental_position],0,1000000,alpha=0.2,color=colour[i])
-        
+
         if contig in df['contig'].values:
             df2 = df[df['contig']==contig]
             if i>0:
@@ -125,7 +122,8 @@ def plotter(directory,annotation,anno_type,strain):
             plt.scatter(x=df2['position'], 
                         y=df2['reads'],
                         c=cmap(df2['orientation']),
-                        s=.3)
+                        s=.3,
+                        alpha=.25)
             
             ## binning the reads per genome position
             k,inserts,inserts_pos,inserts_neg=100000+incremental_position,0,0,0
@@ -154,6 +152,7 @@ def plotter(directory,annotation,anno_type,strain):
                      df3[0],
                      linewidth=1.5,
                      color=cmap(0.17))
+            max_y_value = max(max_y_value, df3[0].max())
             
             df3=pd.DataFrame.from_dict([binned_neg_cum]).transpose()
             plt.plot(df3.index,
@@ -188,15 +187,21 @@ def plotter(directory,annotation,anno_type,strain):
         
         adjust_spines(ax, ['left', 'bottom'], (0, ax.get_xlim()[1]), (ax.get_ylim()))
     
+    for i,contig in enumerate(genome_seq):
+        incremental_position=0
+        plt.fill_between([incremental_position,genome_seq[contig]+incremental_position],0,ax.get_ylim()[1],alpha=0.2,color=colour[i])
+        incremental_position+=genome_seq[contig]
+    
     legend_elements = [Line2D([0], [0], color=cmap(0.25), label='+ strand reads'),
                        Line2D([0], [0], color=cmap(0.17), label='+ strand insertions'),
                        Line2D([0], [0], color=cmap(0.82), label='- strand reads'),
                        Line2D([0], [0], color=cmap(0.91), label='- strand insertions')]
                                
     ax.legend(handles=legend_elements, loc='upper center',bbox_to_anchor=(0.5, -0.15),ncol=2,prop={'size': 8})
+    ax.set_ylim(1, ax.get_ylim()[1])
     
     ax2=plt.subplot(grid[0, 4])
-    ax2.set_ylim(0, np.log(1000000))
+    ax2.set_ylim(0, np.log(ax.get_ylim()[1]))
 
     plt.yticks([])
 
@@ -205,7 +210,7 @@ def plotter(directory,annotation,anno_type,strain):
                fill=True, common_norm=False,
                alpha=.5, linewidth=0)
 
-    adjust_spines(ax2, ['left', 'bottom'], (0, ax2.get_xlim()[1]), (ax2.get_ylim()))
+    adjust_spines(ax2, ['left', 'bottom'], (0, ax2.get_xlim()[1]), (0, np.log(ax.get_ylim()[1])))
     
     plt.savefig(f"{directory}/reads.png", dpi=300,bbox_inches='tight')
     plt.close()

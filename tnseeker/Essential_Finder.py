@@ -127,13 +127,10 @@ class Variables():
 
     def motif_compiler(self):
         dna = ["A", "T", "C", "G"]
-        prog, di_motivs = [], []
-        for letter1 in dna:
-            for letter2 in dna:
-                di_motivs.append(f"{letter1}{letter2}")
-                motiv = f"(?=({letter1}{letter2}))"
-                prog.append(re.compile(motiv, re.IGNORECASE))
+        di_motivs = [f"{a}{b}" for a in dna for b in dna]
+        prog = [re.compile(f"(?=({m}))", re.IGNORECASE) for m in di_motivs]
         return prog, di_motivs
+
 
     def __init__(self, directory=None, strain=None, annotation_type=None, annotation_folder=None, pan_annotation=None,
                  output_name=None, true_positives=None, true_negatives=None,
@@ -333,6 +330,10 @@ def domain_resizer(domain_size_multiplier, basket):
 
     domain_size = int(variables.genome_length /
                       variables.total_insertions * domain_size_multiplier)
+    
+    if domain_size == 0:
+        domain_size = 1
+
     for key in basket:
         local_stop = [basket[key].start]
         start_iterator = basket[key].start
@@ -459,6 +460,7 @@ def poisson_binomial(events, motiv_inbox, tn_chance):
             sucess = np.sum(events)
         return sucess, p_effective
     
+
     sucess, p_effective = chance_matrix(events, motiv_inbox, tn_chance)
     pb = PoiBin(p_effective)
 
@@ -521,7 +523,8 @@ def essentials(chunk, variables):
             chunk[key].significant[domain].pvalue = poisson_binomial(
                 domain_motivs, motiv_insertions, variables.chance_motif_tn[chunk[key].contig])  # / (1/sum(domain_motivs))
         except Exception as e:
-            print(e,key)
+            print(f"{Fore.BLUE} {datetime.datetime.now().strftime('%c')}{Fore.RESET} [{Fore.YELLOW}WARNING{Fore.YELLOW}]{Fore.RESET} Due to {e}, {key} could not be evaluated")
+            chunk[key].significant[domain].pvalue = 1
         return chunk
 
     # annexes all the genes which fit the criteria of essentiality
@@ -996,6 +999,7 @@ def insertion_annotater(chunk, variables):
 
         GC_content, domains = [], []
         # first element is start position of gene
+
         for i, subdomain in enumerate(chunk[key].domains[:-1]):
             GC_content.append(np.array(count_GC([variables.genome_seq[chunk[key].contig][subdomain:chunk[key].domains[i+1]+1]],
                                                 variables.regex_compile)))
@@ -1213,7 +1217,7 @@ def final_compiler(optimal_basket, pvalue, euclidean_points):
     for i, (name, entry) in enumerate(zip(names, pvaluing_array)):
         remove_signal, pvaluing_array = pvaluing_jit(
             pvaluing_array, fdr[0], fdr[-1], i)
-    
+
     fdr = fdr[3]
     legenda = f"Threshold p-value: {pvalue}"
     essentiality = []
@@ -1441,7 +1445,7 @@ def domain_iterator(basket):
         for f in variables.domain_iteration:
             if int(variables.genome_length / variables.total_insertions * f) <= variables.biggest_gene:
                 iteration += 1
-    
+
         while (current_gap <= variables.biggest_gene) and (i+1 < len(variables.domain_iteration)):
             current_gap = int(variables.genome_length /
                               variables.total_insertions * variables.domain_iteration[i])
