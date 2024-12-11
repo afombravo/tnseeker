@@ -7,7 +7,7 @@ from matplotlib.lines import Line2D
 import sys
 from Bio import SeqIO
 
-""" The code is a Python script that visualizes the distribution of insertions 
+""" The script visualizes the distribution of insertions 
     in a genomic dataset. It processes the input data, processes genomic annotations, 
     and generates a plot with the distribution of insertions along the genome. 
     Here's a step-by-step breakdown of the code:
@@ -15,33 +15,7 @@ from Bio import SeqIO
     Define the plotter function that takes the directory, annotation file, 
     annotation type, and strain as input arguments and does the following:
         
-    1. Read the input file containing the insertions data and store the relevant 
-    information in a list called 'entry'.
-    
-    2. Sort the 'entry' list based on the contig and create a pandas DataFrame from it.
-    
-    3. Process the annotation file to obtain the length of each contig in the genome.
-    
-    4. Create a color map using the 'jet' color scheme from matplotlib.
-    
-    5. Initialize a figure and axis for plotting, along with setting up grid specifications.
-    
-    6. Iterate through the contigs in the genome and create a scatter plot showing 
-    the distribution of insertions (with separate colors for the positive and negative strands).
-    
-    7. Perform binning of reads per genome position and plot them on the same axis.
-    
-    8. Customize the appearance of the axis, labels, and title of the plot.
-    
-    9. Add a legend to the plot.
-    
-    10. Create a second axis to display the distribution of reads as a histogram.
-    
-    11. Save the generated plot as an image file (reads.png) in the given directory.
-    
-    The script is executed with command-line arguments. It checks if there are 
-    at least two command-line arguments and calls the main function with the 
-    provided arguments."""
+"""
     
 
 def main(argv):
@@ -108,7 +82,7 @@ def plotter(directory,annotation,anno_type,strain):
     ax.remove()
     grid = plt.GridSpec(1, 5, wspace=0.4, hspace=0.3)
     ax=plt.subplot(grid[0, :4])
-    max_y_value = 0
+    max_y_value_cum_pos,max_y_value_cum_neg,max_y_value_reads,max_y_value_pos,max_y_value_neg = 0,0,0,0,0
     incremental_position=0
     genome_seq={k: v for k, v in sorted(genome_seq.items(), reverse=True,key=lambda item: item[1])}
     
@@ -123,7 +97,8 @@ def plotter(directory,annotation,anno_type,strain):
                         y=df2['reads'],
                         c=cmap(df2['orientation']),
                         s=.3,
-                        alpha=.25)
+                        alpha=.4)
+            max_y_value_reads = max(max_y_value_reads, df2['reads'].max())
             
             ## binning the reads per genome position
             k,inserts,inserts_pos,inserts_neg=100000+incremental_position,0,0,0
@@ -152,25 +127,28 @@ def plotter(directory,annotation,anno_type,strain):
                      df3[0],
                      linewidth=1.5,
                      color=cmap(0.17))
-            max_y_value = max(max_y_value, df3[0].max())
+            max_y_value_cum_pos = max(max_y_value_cum_pos, df3[0].max())
             
             df3=pd.DataFrame.from_dict([binned_neg_cum]).transpose()
             plt.plot(df3.index,
                      df3[0],
                      linewidth=1.5,
                      color=cmap(0.91))
+            max_y_value_cum_neg = max(max_y_value_cum_neg, df3[0].max())
             
             pos=pd.DataFrame.from_dict([binned_pos]).transpose()
             plt.plot(pos.index,
                      pos[0],
                      linewidth=1.5,
                      color=cmap(0.25)) #0.25
+            max_y_value_pos = max(max_y_value_pos, pos[0].max())
             
             neg=pd.DataFrame.from_dict([binned_neg]).transpose()
             plt.plot(neg.index,
                      neg[0],
                      linewidth=1.5,
                      color=cmap(0.82)) #0.82
+            max_y_value_neg = max(max_y_value_neg, neg[0].max())
 
         incremental_position+=genome_seq[contig]
         
@@ -181,15 +159,20 @@ def plotter(directory,annotation,anno_type,strain):
         ax.spines['bottom'].set_visible(True)
         ax.spines['left'].set_visible(True)
         
-        plt.ylabel("Reads / insertions")
+        plt.ylabel("Amount of reads or insertions")
         plt.xlabel("Cumulative genome position (bp)")
         plt.title(f"{strain}")
         
-        adjust_spines(ax, ['left', 'bottom'], (0, ax.get_xlim()[1]), (ax.get_ylim()))
+        max_y_value = max([max_y_value_cum_pos,max_y_value_cum_neg,
+                           max_y_value_reads,
+                           max_y_value_pos,max_y_value_neg])
+        max_y_value *= 1.1
+        
+        adjust_spines(ax, ['left', 'bottom'], (0, ax.get_xlim()[1]), (1,max_y_value))
     
     for i,contig in enumerate(genome_seq):
         incremental_position=0
-        plt.fill_between([incremental_position,genome_seq[contig]+incremental_position],0,ax.get_ylim()[1],alpha=0.2,color=colour[i])
+        plt.fill_between([incremental_position,genome_seq[contig]+incremental_position],0,max_y_value,alpha=0.2,color=colour[i])
         incremental_position+=genome_seq[contig]
     
     legend_elements = [Line2D([0], [0], color=cmap(0.25), label='+ strand reads'),
@@ -198,10 +181,10 @@ def plotter(directory,annotation,anno_type,strain):
                        Line2D([0], [0], color=cmap(0.91), label='- strand insertions')]
                                
     ax.legend(handles=legend_elements, loc='upper center',bbox_to_anchor=(0.5, -0.15),ncol=2,prop={'size': 8})
-    ax.set_ylim(1, ax.get_ylim()[1])
+    ax.set_ylim(1, max_y_value)
     
     ax2=plt.subplot(grid[0, 4])
-    ax2.set_ylim(0, np.log(ax.get_ylim()[1]))
+    ax2.set_ylim(0, np.log(max_y_value))
 
     plt.yticks([])
 
@@ -210,7 +193,7 @@ def plotter(directory,annotation,anno_type,strain):
                fill=True, common_norm=False,
                alpha=.5, linewidth=0)
 
-    adjust_spines(ax2, ['left', 'bottom'], (0, ax2.get_xlim()[1]), (0, np.log(ax.get_ylim()[1])))
+    adjust_spines(ax2, ['left', 'bottom'], (0, ax2.get_xlim()[1]), (0, np.log(max_y_value)))
     
     plt.savefig(f"{directory}/reads.png", dpi=300,bbox_inches='tight')
     plt.close()
