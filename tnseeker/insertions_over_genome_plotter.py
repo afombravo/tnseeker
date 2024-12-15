@@ -20,11 +20,14 @@ from Bio import SeqIO
 
 def main(argv):
     directory = argv[0]
-    annotation = argv[1]
-    anno_type = argv[2]
-    strain = argv[3]
+    fasta = argv[1]
+    annotation = argv[2]
+    anno_type = argv[3]
+    barcode = argv[4] == "True"
+    strain = argv[5]
 
-    plotter(directory,annotation,anno_type,strain)
+    plotter(directory,fasta,anno_type,strain)
+    reads_per_gene(directory,annotation,strain,anno_type,barcode)
 
 def adjust_spines(ax, spines,x,y): #offset spines
     for loc, spine in ax.spines.items():
@@ -37,7 +40,125 @@ def adjust_spines(ax, spines,x,y): #offset spines
         else:
             spine.set_color('none')  # don't draw spine
 
-def plotter(directory,annotation,anno_type,strain):
+def get_gene_len(anno_type,annotation):
+    gene_l = {}
+    
+    if anno_type == "gb":
+        for rec in SeqIO.parse(annotation, "gb"):
+            for feature in rec.features:
+                if (feature.type != 'source') & (feature.type != 'misc_feature'):
+                    start = feature.location.start
+                    end = feature.location.end
+                    domain_size = end - start
+                    
+                    try:
+                        identity = feature.qualifiers['locus_tag'][0]
+                        if "gene" in feature.qualifiers:
+                            identity = feature.qualifiers['gene'][0]
+                        gene_l[identity] = domain_size
+                        
+                    except KeyError:
+                        identity = None
+                    
+    else:
+        with open(annotation) as current:
+            for line in current:
+                GB = line.split('\t') #len(GB)
+                
+                if "##FASTA" in GB[0]:
+                    break
+                
+                if "#" not in GB[0][:3]: #ignores headers
+    
+                    start = int(GB[3])
+                    end = int(GB[4])
+                    domain_size = end - start
+                    
+                    features = GB[8].split(";") #gene annotation file
+                    feature = {}
+                    for entry in features:
+                        entry = entry.split("=")
+                        if len(entry) == 2:
+                            feature[entry[0]] = entry[1].replace("\n","")
+                    try:
+                        if "gene" in feature:
+                            gene=feature["gene"]
+                        if "Name" in feature:
+                            gene=feature["Name"]
+                        else:
+                            gene=feature["ID"]
+                    
+                    except KeyError:
+                        identity = None
+                    
+                    gene_l[gene] = domain_size
+                    
+    return gene_l
+
+def reads_per_gene(directory,annotation,strain,anno_type,barcode):
+
+    gene_l = get_gene_len(anno_type,annotation)
+    
+    df = pd.read_csv(f"{directory}/all_insertions_{strain}.csv")
+    dict_df = pd.DataFrame({'Gene Name': list(gene_l.keys()), 'lenght': list(gene_l.values())})
+    gene_counts = df.groupby('Gene Name').size().reset_index(name='insertions')
+    merged_df = pd.merge(gene_counts, dict_df, on='Gene Name', how='left')
+    
+    if barcode:
+        barcodes_per_gene(dict_df,directory,strain)
+    
+    merged_df["insertions/gene_len"] = merged_df['insertions'] / merged_df['lenght']
+    merged_df = merged_df.dropna(subset=['insertions/gene_len'])
+    
+    fig, ax = plt.subplots()  
+    sns.histplot(
+        data=merged_df,
+        x='insertions/gene_len',
+        kde=False              # Disable Kernel Density Estimate
+    )
+    
+    plt.ylabel('Number of genes')
+    plt.xlabel('Tn insertions per gene per length')
+    plt.title('Histogram of transposon insertions per gene per length')
+    
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.spines['bottom'].set_visible(True)
+    ax.spines['left'].set_visible(True)
+    adjust_spines(ax, ['left', 'bottom'], (0, ax.get_xlim()[1]), (1,ax.get_ylim()[1]))
+    plt.savefig(f"{directory}/Histogram of transposon insertions per gene per length.png", dpi=300,bbox_inches='tight')
+    
+    plt.show()
+
+def barcodes_per_gene(dict_df,directory,strain):
+    df = pd.read_csv(f"{directory}/annotated_barcodes_{strain}.csv")
+    gene_counts = df.groupby('Gene Name').size().reset_index(name='#Barcode')
+    
+    merged_df = pd.merge(gene_counts, dict_df, on='Gene Name', how='left')
+    merged_df["barcodes/gene_len"] = merged_df['#Barcode'] / merged_df['lenght']
+    merged_df = merged_df.dropna(subset=['barcodes/gene_len'])
+    
+    fig, ax = plt.subplots()  
+    sns.histplot(
+        data=merged_df,
+        x='barcodes/gene_len',
+        kde=False              # Disable Kernel Density Estimate
+    )
+    
+    plt.ylabel('Number of genes')
+    plt.xlabel('barcodes per gene per length')
+    plt.title('Histogram of barcodes per gene per length')
+    
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.spines['bottom'].set_visible(True)
+    ax.spines['left'].set_visible(True)
+    adjust_spines(ax, ['left', 'bottom'], (0, ax.get_xlim()[1]), (1,ax.get_ylim()[1]))
+    plt.savefig(f"{directory}/Histogram of barcodes per gene per length.png", dpi=300,bbox_inches='tight')
+    
+    plt.show()
+    
+def plotter(directory,fasta,anno_type,strain):
     entry=[]
     with open(f"{directory}/all_insertions_{strain}.csv") as current:
         for line in current:
@@ -63,7 +184,7 @@ def plotter(directory,annotation,anno_type,strain):
     genome_seq={}
     if anno_type != 'gb':
         contig=None
-        with open(annotation) as current: #NT12004_22
+        with open(fasta) as current: #NT12004_22
             for line in current:
                 if '>' not in line:
                     line = line[:-1]
@@ -72,7 +193,7 @@ def plotter(directory,annotation,anno_type,strain):
                     contig = line[1:-1]
                     genome_seq[contig] = 0
     else:
-        for rec in SeqIO.parse(annotation, "gb"):
+        for rec in SeqIO.parse(fasta, "gb"):
             genome_seq[rec.id] = len(rec.seq)
           
     cmap = matplotlib.colormaps['jet'] #gnuplot
@@ -200,5 +321,5 @@ def plotter(directory,annotation,anno_type,strain):
 
 if __name__ == "__main__":
     if len(sys.argv) > 2:
-        argv = [sys.argv[1]]+[sys.argv[2]]+[sys.argv[3]]+[sys.argv[4]]
+        argv = [sys.argv[1]]+[sys.argv[2]]+[sys.argv[3]]+[sys.argv[4]]+[sys.argv[5]]+[sys.argv[6]]
     main(argv)

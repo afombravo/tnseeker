@@ -263,7 +263,9 @@ def essentials(variables):
 def insertions_plotter(variables):     
     insertions_over_genome_plotter.main([f'{variables["directory"]}',
                                          f'{variables["genome_file"]}',
+                                         f'{variables["annotation_file"]}',
                                          f'{variables["annotation_type"]}',
+                                         f'{variables["barcode"]}',
                                          f'{variables["strain"]}'])
         
 def subprocess_cmd(command):
