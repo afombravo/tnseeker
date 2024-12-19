@@ -1,39 +1,17 @@
 import os
 import multiprocessing
+from tnseeker.extras.helper_functions import colourful_errors
 import sys
 from numba import njit
 import numpy as np
 import gzip
 import glob
-from colorama import Fore
-import datetime
 
 """ This script is for processing and trimming high-throughput sequencing data. 
     It takes as input a fastq file, a folder path to store the output, the 
     sequence of the transposon used in the experiment, and some optional 
     parameters such as whether to consider barcode information and the Phred 
-    score quality threshold.
-
-    The script has several functions that perform different tasks:
-    
-    1. seq2bin: converts a string to binary, and then to a numpy array in int8 format
-    2. binary_subtract: used for matching two sequences based on the allowed mismatches
-    3. imperfect_find: matches two sequences based on the allowed mismatches, 
-    used for sequencing searching a start/end place in a read
-    4. write: writes the list of processed reads to a file
-    5. barcodeID: extracts the barcode from a read
-    6. read_trimer: trims reads based on the presence of transposon sequences 
-    and quality score
-    7. cpu: returns the number of available CPU cores
-    8. extractor: the main function for trimming reads and writing the output
-    9. paired_ended_rearrange: rearranges paired-end reads into proper pairs
-    10. main: the main function that takes the inputs, calls the functions, and writes the output
-    
-    The script processes the fastq file in parallel by dividing it into chunks 
-    and using multiple CPU cores to trim the reads. The processed reads and 
-    barcode information, if specified, are then written to files in the specified folder. 
-    The script also has the capability to process paired-end reads and rearrange 
-    them into proper pairs."""
+    score quality threshold."""
 
 def seq2bin(sequence):
     
@@ -57,7 +35,7 @@ def binary_subtract(array1,array2,mismatch):
     return 1
 
 @njit
-def imperfect_find(read,seq,mismatch): 
+def imperfect_find(read,seq,mismatch,start_place=0): 
     
     """ Matches 2 sequences (after converting to int8 format)
     based on the allowed mismatches. Used for sequencing searching
@@ -66,13 +44,13 @@ def imperfect_find(read,seq,mismatch):
     s=seq.size
     r=read.size
     fall_over_index = r-s-1
-    for i,bp in enumerate(read): #range doesnt exist in njit
-        comparison = read[i:s+i]
+    for i,bp in enumerate(read[start_place:]): 
+        comparison = read[start_place+i:s+start_place+i]
         finder = binary_subtract(seq,comparison,mismatch)
         if i > fall_over_index:
-            return
+            return None
         if finder != 0:
-            return i
+            return i+start_place
 
 def write(listing, name, folder_path):
     text_out = folder_path + name
@@ -86,14 +64,17 @@ def write(listing, name, folder_path):
 
 def barcodeID(sequence,sequence_bin,borders,miss_up,miss_down):
     border_up = imperfect_find(sequence_bin,borders[0],miss_up)
-    border_down = imperfect_find(sequence_bin,borders[1],miss_down)
-    if (border_up is not None) & (border_down is not None):
-        return sequence[border_up+len(borders[0]):border_down]
+    if border_up is not None:
+        start_place = border_up+len(borders[0])
+        border_down = imperfect_find(sequence_bin,borders[1],miss_down,start_place)
+        if border_down is not None:
+            return sequence[start_place:border_down]
+    return None
 
 def read_trimer(reading,sequences,quality_set,mismatches,trimming_len,miss_up,\
                 miss_down,quality_set_bar_up,quality_set_bar_down,borders="",barcode_allow=False):
-    processed_read = []
-    barcode_pool = []
+    
+    processed_read,barcode_pool = [],[]
     for read in reading:
         sequence = str(read[1],"utf-8")
         sequence_bin = seq2bin(sequence)
@@ -123,20 +104,13 @@ def read_trimer(reading,sequences,quality_set,mismatches,trimming_len,miss_up,\
 
     return [processed_read,barcode_pool]
                 
-def cpu():
-    c = multiprocessing.cpu_count()
-    if c >= 2:
-        c -= 1
-    pool = multiprocessing.Pool(processes = c)
-    return pool, c
-      
 def extractor(fastq,folder_path,sequences,barcode,barcode_upstream,barcode_downstream,\
-              mismatches,trimming_len,miss_up,miss_down,phred_up,phred_down,phred = 1):
+              mismatches,trimming_len,miss_up,miss_down,phred_up,phred_down,
+              cpus,pool,phred = 1):
     
     transposon_seq = seq2bin(sequences)  
     reading = []
     read_bucket=[]
-    pool, cpus = cpu()
     divider = 250000
     count_total=0
     count_trimed=0
@@ -155,7 +129,8 @@ def extractor(fastq,folder_path,sequences,barcode,barcode_upstream,barcode_downs
     file_counter = 0
     for file in fastq:
         file_counter += 1
-        print(f"{Fore.BLUE} {datetime.datetime.now().strftime('%c')}{Fore.RESET} [{Fore.GREEN}INFO{Fore.RESET}] Processing {file_counter} out of {file_number} fastq files")
+        colourful_errors("INFO",
+            f"Processing {file_counter} out of {file_number} fastq files.")
         try:
             with gzip.open(file, "rb") as current:
                 for line in current:
@@ -167,8 +142,8 @@ def extractor(fastq,folder_path,sequences,barcode,barcode_upstream,barcode_downs
                         count_total+=1
                         
                     if len(read_bucket)>=cpus*divider:
+                        pool = multiprocessing.Pool(processes = cpus)
                         result_objs,subdivied = [],[]
-                        pool, cpus = cpu()
                         z, spliter_mid=0,divider
                         for i in range(cpus):
                             subdivied.append(read_bucket[z:spliter_mid])
@@ -201,7 +176,8 @@ def extractor(fastq,folder_path,sequences,barcode,barcode_upstream,barcode_downs
                                 write(barcodes, "/barcodes_1.txt", folder_path)
                         read_bucket = []
         except Exception:
-            print(f'Error parsing {file}')
+            colourful_errors("WARNING",
+                f'Error parsing {file}')
             
     if not barcode:
         trimmed,barcodes=read_trimer(read_bucket,transposon_seq,quality_set,mismatches,trimming_len,miss_up,miss_down,
@@ -276,23 +252,25 @@ def main(argv):
     sequences = argv[2]
     paired = argv[3]
     phred = int(argv[5])
-    mismatches = int(argv[-2])
-    trimming_len = int(argv[-1])
+    mismatches = int(argv[-3])
+    trimming_len = int(argv[-2])
+    cpus = int(argv[-1])
+    pool = multiprocessing.Pool(processes = cpus)
     
     barcode,barcode_upstream,barcode_downstream,miss_up,miss_down,phred_up,phred_down = False,None,None,None,None,None,None
     if argv[4] == "True":
         barcode = True
-        barcode_upstream = argv[-8]
-        barcode_downstream = argv[-7]
-        miss_up = int(argv[-6])
-        miss_down = int(argv[-5])
-        phred_up = int(argv[-4])
-        phred_down = int(argv[-3])
+        barcode_upstream = argv[-9]
+        barcode_downstream = argv[-8]
+        miss_up = int(argv[-7])
+        miss_down = int(argv[-6])
+        phred_up = int(argv[-5])
+        phred_down = int(argv[-4])
 
     try:
         extractor(fastq1,folder_path,sequences,barcode,barcode_upstream,\
                   barcode_downstream,mismatches,trimming_len,miss_up,miss_down,\
-                  phred_up,phred_down,phred)
+                  phred_up,phred_down,cpus,pool,phred)
     except Exception as e:
         print(e)
     
@@ -302,9 +280,9 @@ def main(argv):
             
 if __name__ == "__main__":
     if len(sys.argv) > 7:
-        argv = sys.argv[1:12] if sys.argv[4] == "PE" else sys.argv[1:11]
+        argv = sys.argv[1:13] if sys.argv[4] == "PE" else sys.argv[1:12]
         if argv[4] == "True":
-            argv.append(sys.argv[-6],sys.argv[-5],sys.argv[-4])
+            argv.append(sys.argv[-7],sys.argv[-6],sys.argv[-5])
     main(argv)
     
     multiprocessing.set_start_method("spawn")

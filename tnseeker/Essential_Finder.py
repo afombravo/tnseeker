@@ -6,6 +6,7 @@ import numpy as np
 import scipy
 import re
 from tnseeker.extras.possion_binom import PoiBin
+from tnseeker.extras.helper_functions import colourful_errors,csv_writer
 from scipy.stats import binomtest
 import multiprocessing
 import matplotlib.pyplot as plt
@@ -16,8 +17,6 @@ import pandas as pd
 import csv
 import subprocess
 from pathlib import Path
-from colorama import Fore
-import datetime
 import matplotlib
 matplotlib.use('Agg')
 
@@ -48,6 +47,8 @@ def inputs(argv):
     variables.output_name = variables.strain + "_alldomains"
     variables.domain_uncertain_threshold = float(argv[8])  # 0.75
     variables.biggest_gene = 0
+
+    variables.cpus = int(argv[9])
 
     variables.true_positives = pkg_resources.resource_filename(
         __name__, 'data/true_positives.fasta')
@@ -82,20 +83,13 @@ def path_finder():
             variables.annotation_folder, '*.fasta', variables.strain))
 
         if len(variables.annotation_file_paths) < 2:
-            print(f"{Fore.BLUE} {datetime.datetime.now().strftime('%c')}{Fore.RESET} [{Fore.RED}FATAL{Fore.RESET}] Check there is a .fasta and .gff file in the indicated folder")
+            colourful_errors("FATAL",
+                 "Check there is a .fasta and .gff file in the indicated folder.")
             raise Exception
 
-
 def output_writer(output_folder, name_folder, output_file):
-    ''' The output_writer function writes the given output_file data as a CSV file 
-    to the specified output_folder with the provided name_folder. 
-    It ensures proper formatting and line handling by using the csv module. '''
-
     output_file_path = os.path.join(output_folder, name_folder + ".csv")
-    with open(output_file_path, "w", newline='') as output:
-        writer = csv.writer(output)
-        writer.writerows(output_file)
-
+    csv_writer(output_file_path,output_file)
 
 class Variables():
 
@@ -104,26 +98,7 @@ class Variables():
     such as directory paths, strain information, annotation details, contig information, 
     genome sequence and length, and statistical parameters, among others. 
     Users can provide custom values for these attributes, or the class will 
-    assign default values when initialized. 
-
-    The class also includes two methods for handling motif-related calculations:
-
-        motif_compiler: This method generates a list of dinucleotide motifs (di_motivs) 
-        and their corresponding compiled regular expressions (regex_compile) for 
-        pattern matching. It covers all possible combinations of the four 
-        DNA bases (A, T, C, G) in dinucleotide motifs.
-
-        normalizer: This method calculates the probability of having a transposon 
-        insertion in each dinucleotide motif by counting the entire motif content 
-        of the genome and dividing the transposon motif count by the motif 
-        genome count. It stores the results in the chance_motif_tn attribute. 
-        If any entry in the resulting array is greater than or equal to 1, 
-        it is set to 0.999999. This is related with downstream calculations using
-        the poibin module.
-
-    Overall, the Variables class serves as a central storage and management unit 
-    for various attributes and calculations essential for genomic data analysis. 
-    It streamlines data handling, allowing for smoother execution of analysis tasks. '''
+    assign default values when initialized. '''
 
     def motif_compiler(self):
         dna = ["A", "T", "C", "G"]
@@ -312,8 +287,9 @@ def blast_maker():
     variables.true_positives = tblastn(variables.true_positives)
     variables.true_negatives = tblastn(variables.true_negatives)
     
-    print(f"{Fore.BLUE} {datetime.datetime.now().strftime('%c')}{Fore.RESET} [{Fore.GREEN}INFO{Fore.RESET}] Found {len(variables.true_positives)} benchmark essential genes.")
-    
+    colourful_errors("INFO",
+        f"Found {len(variables.true_positives)} benchmark essential genes.")
+
     compiled_benchmark = {**variables.true_positives, **variables.true_negatives}
     for gene in compiled_benchmark:
         lenght = compiled_benchmark[gene].end-compiled_benchmark[gene].start
@@ -378,7 +354,8 @@ def gene_insertion_matrix(basket):
 
         return genome_insert_matrix, genome_borders_matrix, genome_orient_plus_matrix, genome_orient_neg_matrix
 
-    print(f"{Fore.BLUE} {datetime.datetime.now().strftime('%c')}{Fore.RESET} [{Fore.GREEN}INFO{Fore.RESET}] Compiling insertion matrix")
+    colourful_errors("INFO",
+        "Compiling insertion matrix.")
 
     for contig in variables.genome_seq:
         contig_size = len(variables.genome_seq[contig])
@@ -523,7 +500,8 @@ def essentials(chunk, variables):
             chunk[key].significant[domain].pvalue = poisson_binomial(
                 domain_motivs, motiv_insertions, variables.chance_motif_tn[chunk[key].contig])  # / (1/sum(domain_motivs))
         except Exception as e:
-            print(f"{Fore.BLUE} {datetime.datetime.now().strftime('%c')}{Fore.RESET} [{Fore.YELLOW}WARNING{Fore.YELLOW}]{Fore.RESET} Due to {e}, {key} could not be evaluated")
+            colourful_errors("WARNING",
+                f"Due to {e}, {key} could not be evaluated.")
             chunk[key].significant[domain].pvalue = 1
         return chunk
 
@@ -695,7 +673,8 @@ def basket_storage():
     ''' The basket_storage function forwards the program to the correct annotation
     parser function based on the input annotation file format.'''
 
-    print(f"{Fore.BLUE} {datetime.datetime.now().strftime('%c')}{Fore.RESET} [{Fore.GREEN}INFO{Fore.RESET}] Parsing gene annotations")
+    colourful_errors("INFO",
+        "Parsing gene annotations.")
 
     file = variables.annotation_file_paths[0]
 
@@ -881,8 +860,9 @@ def gene_info_parser_gff(file):
                 break
     
     if len(basket) == 0:
-        print(f"{Fore.BLUE} {datetime.datetime.now().strftime('%c')}{Fore.RESET} [{Fore.YELLOW}WARNING{Fore.RESET}] Watch out, no genomic features were loaded. The gff file is not being parsed correctly.")
-        
+        colourful_errors("WARNING",
+            "Watch out, no genomic features were loaded. The gff file is not being parsed correctly.")
+
     basket = inter_gene_annotater(basket, genes)
 
     for gene in basket:
@@ -915,8 +895,9 @@ def insertions_parser(startup=True):
         insertions_df["position"].astype(str)+insertions_df["Orientation"]
     insertions_df.drop_duplicates(subset=['unique'], inplace=True)
     if startup:
-        print(f"{Fore.BLUE} {datetime.datetime.now().strftime('%c')}{Fore.RESET} [{Fore.GREEN}INFO{Fore.RESET}] Total Insertions in library: {len(insertions_df)}")
-        
+        colourful_errors("INFO",
+            f"Total Insertions in library: {len(insertions_df)}")
+
     insertions_df.drop(
         ['Read Counts', 'Average mapQ across reads', "unique"], axis=1, inplace=True)
 
@@ -964,26 +945,6 @@ def insertions_parser(startup=True):
         # calculating the insertion frequency
         variables.chance_motif_tn[contig] = variables.normalizer(contig)
     
-    #if startup:
-    #    print(f"{Fore.BLUE} {datetime.datetime.now().strftime('%c')}{Fore.RESET} [{Fore.GREEN}INFO{Fore.RESET}] Transposon insertion frequency (on leading strand):")
-    #    for contig in variables.transposon_motiv_freq:
-    #        for tn, mtv in zip(variables.transposon_motiv_freq[contig], variables.di_motivs):
-    #            print(f" {Fore.GREEN}{mtv}: {Fore.RESET}{tn}%")
-
-
-def cpu():
-    ''' The cpu function determines the available number of CPUs that can be used.
-    If more than one is available, one of them is left to avoid clogging the computer,
-    while the others are used by the program. '''
-
-    # c = multiprocessing.cpu_count()
-    # if c >= 2:
-    #     c -= 1
-    c = 1
-    pool = multiprocessing.Pool(processes=c)
-    return pool, c
-
-
 def insertion_annotater(chunk, variables):
     ''' The function insertion_annotater takes a dictionary chunk of gene 
     objects and a set of variables and annotates each gene object with 
@@ -1062,16 +1023,15 @@ def multi_annotater(basket):
     each subdomain, and the transposon motif content of each subdomain. T
     he function returns the annotated chunk. '''
 
-    pool, cpus = cpu()
     # divides the dictionary keys into smaller blocks that can be efficiently be multiprocessed
-    divider = len(basket)//cpus
-    return_list = [dict() for i in range(cpus)]
+    divider = len(basket)//variables.cpus
+    return_list = [dict() for i in range(variables.cpus)]
     i, list_iter = 0, 0
     for k in basket:
-        if i < cpus:
+        if i < variables.cpus:
             return_list[i][k] = basket[k]
 
-        if i == cpus:  # odd number split will be distributed equally
+        if i == variables.cpus:  # odd number split will be distributed equally
             list_iter += 1
             return_list[list_iter][k] = basket[k]
 
@@ -1079,6 +1039,8 @@ def multi_annotater(basket):
             i += 1
 
     result_objs = []
+    pool = multiprocessing.Pool(processes = variables.cpus)
+
     for chunk in return_list:
         result = pool.apply_async(
             insertion_annotater, args=((chunk, variables)))
@@ -1178,11 +1140,11 @@ def multi_pvalue_iter(basket):
 
     # change here to increase resolution of iteration
     pvalue = [variables.pvalue * 0.5 ** i for i in range(200)]
-    pool, cpus = cpu()
     result_objs, pvalue_listing, euclidean_points = [], [], []
 
     pvaluing_array, names, pvalues_list = class_to_numba(basket)
 
+    pool = multiprocessing.Pool(processes = variables.cpus)
     for p in pvalue:
         result = pool.apply_async(pvalue_iteration, args=((names, pvalues_list, 
                                                            pvaluing_array, p, pvalue_listing,
@@ -1360,7 +1322,8 @@ def genome_loader(startup=True):
 
         for contig in variables.genome_seq:
             if startup:
-                print(f"{Fore.BLUE} {datetime.datetime.now().strftime('%c')}{Fore.RESET} [{Fore.GREEN}INFO{Fore.RESET}] Loaded contig {contig}")
+                colourful_errors("INFO",
+                    f"Loaded contig {contig}")
             variables.genome_length += len(variables.genome_seq[contig])
 
     elif variables.annotation_type == "gb":
@@ -1371,9 +1334,9 @@ def genome_loader(startup=True):
             variables.orientation_contig[variables.annotation_contig] = {}
             variables.insertions_contig[variables.annotation_contig] = {}
             if startup:
-                print(f"{Fore.BLUE} {datetime.datetime.now().strftime('%c')}{Fore.RESET} [{Fore.GREEN}INFO{Fore.RESET}] Loaded contig {variables.annotation_contig}")
+                colourful_errors("INFO",
+                    f"Loaded contig {variables.annotation_contig}")
             variables.genome_seq[variables.annotation_contig] = str(rec.seq)
-
 
 def domain_iterator(basket):
     ''' The function domain_iterator performs an iterative process to find 
@@ -1450,7 +1413,8 @@ def domain_iterator(basket):
         while (current_gap <= variables.biggest_gene) and (i+1 < len(variables.domain_iteration)):
             current_gap = int(variables.genome_length /
                               variables.total_insertions * variables.domain_iteration[i])
-            print(f"{Fore.BLUE} {datetime.datetime.now().strftime('%c')}{Fore.RESET} [{Fore.GREEN}INFO{Fore.RESET}] Current domain division iteration: {i+1} out {iteration}")
+            colourful_errors("INFO",
+                f"Current domain division iteration: {i+1} out {iteration}")
             iterator_store = iterating(
                 i, iterator_store, euclidean_distances, basket, current_gap)
             i += 1
@@ -1460,10 +1424,13 @@ def domain_iterator(basket):
         variables.best_domain_size = sorted_optimal[0][0]
         
     except Exception:
-        print(f"{Fore.BLUE} {datetime.datetime.now().strftime('%c')}{Fore.RESET} [{Fore.YELLOW}WARNING{Fore.RESET}] Low saturating library detected")
+        colourful_errors("WARNING",
+            "Low saturating library detected.")
         variables.best_domain_size = sorted_optimal[0]
     
-    print(f"{Fore.BLUE} {datetime.datetime.now().strftime('%c')}{Fore.RESET} [{Fore.GREEN}INFO{Fore.RESET}] Optimal domain division size of {variables.best_domain_size}bp")
+    colourful_errors("INFO",
+        f"Optimal domain division size of {variables.best_domain_size}bp")
+
     fig, ax1 = plt.subplots()
 
     plt.xlim(0, 1)

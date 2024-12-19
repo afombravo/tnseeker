@@ -56,17 +56,11 @@ while [[ $(wc -l <"$BARCODES_FILE") -gt 0 ]]; do
     tail -n +$((MAX_BARCODES + 1)) "$BARCODES_FILE" > "$barcodes_remain"
     mv "$barcodes_remain" "$BARCODES_FILE"
 
-    # Process the SAM file with the current chunk of barcodes
     process_chunk "$barcodes_chunk" "$TEMP_SAM" "$processed_chunk"
-
-    # Prepare for the next iteration
     mv "$processed_chunk" "$TEMP_SAM"
 done
 
-# Final move to output
 mv "$TEMP_SAM" "$OUTPUT_FILE"
 
 # Clean up
 rm -f "$barcodes_chunk" "$barcodes_remain" "$TEMP_SAM" "$BARCODES_FILE"
-
-echo "Processing complete. Output is in $OUTPUT_FILE"

@@ -94,6 +94,9 @@ An example use case is the folowing. See below the meaning of the input argument
 tnseeker -s BW25113 -sd ./ -ad ./ -at gb -st SE --tn AGATGTGTATAAGAGACAG --ph 10 --mq 40
 ```
 
+When using HPC systems it is advisable to include the `--cpu` flag and specify the amount of threads.
+
+
 ### File requirements
 
 tnseeker requires several input files:
@@ -179,6 +182,8 @@ tnseeker requires several input files:
 
   --sl3 [SL3]  3' gene trimming percent for essentiality determination (number
                between 0 and 1)
+
+  --cpu [CPU]  Define the number of threads (must be and integer). Advisable when using HPC systems.
 
 ---
 ## Python Dependencies

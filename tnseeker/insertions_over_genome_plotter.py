@@ -114,7 +114,7 @@ def reads_per_gene(directory,annotation,strain,anno_type,barcode):
     sns.histplot(
         data=merged_df,
         x='insertions/gene_len',
-        kde=False              # Disable Kernel Density Estimate
+        kde=False
     )
     
     plt.ylabel('Number of genes')
@@ -142,7 +142,7 @@ def barcodes_per_gene(dict_df,directory,strain):
     sns.histplot(
         data=merged_df,
         x='barcodes/gene_len',
-        kde=False              # Disable Kernel Density Estimate
+        kde=False
     )
     
     plt.ylabel('Number of genes')

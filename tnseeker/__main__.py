@@ -1,9 +1,8 @@
 import os,glob
 import subprocess
-import multiprocessing
 from tnseeker import Essential_Finder,reads_trimer,sam_to_insertions,insertions_over_genome_plotter # type: ignore
+from tnseeker.extras.helper_functions import cpu,colourful_errors
 import argparse
-import datetime
 from colorama import Fore
 import pkg_resources
 
@@ -58,11 +57,13 @@ def path_finder_seq(variables):
         os.mkdir(variables["directory"])
      
     if variables["sequencing_files"] == None:
-        print(f"\n{Fore.BLUE} {datetime.datetime.now().strftime('%c')}{Fore.RESET} [{Fore.RED}FATAL{Fore.RESET}] check that .fastq files exist in the indicated folder.\n")
+        colourful_errors("FATAL",
+                 "check that .fastq files exist in the indicated folder.")
         raise Exception
         
     if variables["fasta"] == None:
-        print(f"\n{Fore.BLUE} {datetime.datetime.now().strftime('%c')}{Fore.RESET} [{Fore.RED}FATAL{Fore.RESET}] check that the {variables['strain']}.fasta file exist in the indicated folder.\n")
+        colourful_errors("FATAL",
+                f"check that the {variables['strain']}.fasta file exist in the indicated folder.")
         raise Exception
     
     if variables["annotation_type"] == "gb":
@@ -77,17 +78,11 @@ def path_finder_seq(variables):
         variables["genome_file"]=path_finder(variables,'*.fasta')
 
     if variables["annotation_file"] == None:
-        print(f"\n{Fore.BLUE} {datetime.datetime.now().strftime('%c')}{Fore.RESET} [{Fore.RED}FATAL{Fore.RESET}] check that the annotation file exists in the indicated folder.\n")
+        colourful_errors("FATAL",
+            "check that the annotation file exists in the indicated folder.")
         raise Exception
 
     return variables
-
-def cpu():
-    c = multiprocessing.cpu_count()
-    if c >= 2:
-        c -= 1
-    pool = multiprocessing.Pool(processes = c)
-    return pool, c
 
 def bowtie_index_maker(variables):
     
@@ -107,20 +102,20 @@ def bowtie_aligner_maker_single(variables):
     
     if not os.path.isfile(f'{variables["directory"]}/alignment.sam'):
     
-        cpus = cpu()[1]
         send = ["bowtie2",
                 "--end-to-end",
                 "-x",f"{variables['index_dir']}{variables['strain']}",
                 "-U",f"{variables['fastq_trimed']}",
                 "-S",f"{variables['directory']}/alignment.sam",
                 "--no-unal",
-                f"--threads {cpus}",
+                f"--threads {variables['cpus']}",
                 f"2>'{variables['directory']}/bowtie_align_log.log'"]
         
         subprocess_cmd(send)
         
     else:
-        print(f"{Fore.BLUE} {datetime.datetime.now().strftime('%c')}{Fore.RESET} [{Fore.GREEN}INFO{Fore.RESET}] Found {variables['directory']}/alignment.sam, skipping alignment")
+        colourful_errors("INFO",
+            f"Found {variables['directory']}/alignment.sam, skipping alignment.")
 
     if variables["remove"]:
         os.remove(variables['fastq_trimed'])
@@ -129,7 +124,6 @@ def bowtie_aligner_maker_paired(variables):
     
     if not os.path.isfile(f'{variables["directory"]}/alignment.sam'):
     
-        cpus = cpu()[1]
         send = ["bowtie2",
                 "--end-to-end",
                 "-x",f"{variables['index_dir']}{variables['strain']}",
@@ -137,13 +131,14 @@ def bowtie_aligner_maker_paired(variables):
                 "-2",f"{variables['fastq_trimed'][1]}",
                 "-S",f"{variables['directory']}/alignment.sam",
                 "--no-unal",
-                f"--threads {cpus}",
+                f"--threads {variables['cpus']}",
                 f"2>'{variables['directory']}/bowtie_align_log.log'"]
         
         subprocess_cmd(send)
         
     else:
-        print(f"{Fore.BLUE} {datetime.datetime.now().strftime('%c')}{Fore.RESET} [{Fore.GREEN}INFO{Fore.RESET}] Found {variables['directory']}/alignment.sam, skipping alignment")
+        colourful_errors("INFO",
+            f"Found {variables['directory']}/alignment.sam, skipping alignment.")
 
     if variables["remove"]:
         os.remove(variables['fastq_trimed'][0])
@@ -196,18 +191,23 @@ def tn_trimmer_single(variables):
                            f"{variables['barcode_up_phred']}",
                            f"{variables['barcode_down_phred']}",
                            f"{variables['tn_mismatches']}",
-                           f"{variables['trimmed_after_tn']}"])
+                           f"{variables['trimmed_after_tn']}",
+                           f"{variables['cpus']}"
+                           ]
+                        )
     
     else:
-        print(f"{Fore.BLUE} {datetime.datetime.now().strftime('%c')}{Fore.RESET} [{Fore.GREEN}INFO{Fore.RESET}] Found {variables['fastq_trimed']}, skipping trimming")
-
+        colourful_errors("INFO",
+            f"Found {variables['fastq_trimed']}, skipping trimming.")
     return variables
 
 def tn_trimmer_paired(variables):
     try:
         variables['sequencing_files']
     except IndexError:
-        raise IndexError("Make sure you selected the correct sequencing type, or that the .gz files are labelled accordingly")
+        colourful_errors("FATAL",
+            "Make sure that you have selected the correct sequencing type, or that the .gz files are named correctly.")
+        raise IndexError
     
     variables["fastq_trimed"] = [f'{variables["directory"]}/processed_reads_1.fastq']+\
                                 [f'{variables["directory"]}/processed_reads_2.fastq']
@@ -228,7 +228,10 @@ def tn_trimmer_paired(variables):
                            f"{variables['barcode_up_phred']}",
                            f"{variables['barcode_down_phred']}",
                            f"{variables['tn_mismatches']}",
-                           f"{variables['trimmed_after_tn']}"])
+                           f"{variables['trimmed_after_tn']}",
+                           f"{variables['cpus']}"
+                           ]
+                        )
 
     return variables
 
@@ -244,10 +247,14 @@ def sam_parser(variables):
                                 f"{variables['barcode']}",
                                 f"{variables['MAPQ']}",
                                 f"{variables['annotation_file']}",
-                                f"{variables['intergenic_size_cutoff']}"])
+                                f"{variables['intergenic_size_cutoff']}",
+                                f"{variables['cpus']}"
+                                ]
+                            )
         
     else:
-        print(f"{Fore.BLUE} {datetime.datetime.now().strftime('%c')}{Fore.RESET} [{Fore.GREEN}INFO{Fore.RESET}] Found all_insertions_{variables['strain']}.csv, skipping tn insertion parsing")
+        colourful_errors("INFO",
+            f"Found all_insertions_{variables['strain']}.csv, skipping tn insertion parsing.")
 
 def essentials(variables):
     Essential_Finder.main([f'{variables["directory"]}',
@@ -258,7 +265,10 @@ def essentials(variables):
                            f'{variables["subdomain_length_down"]}',
                            f'{variables["pvalue"]}',
                            f"{variables['intergenic_size_cutoff']}",
-                           f"{variables['domain_uncertain_threshold']}"])
+                           f"{variables['domain_uncertain_threshold']}",
+                           f"{variables['cpus']}",
+                           ]
+                        )
 
 def insertions_plotter(variables):     
     insertions_over_genome_plotter.main([f'{variables["directory"]}',
@@ -266,7 +276,9 @@ def insertions_plotter(variables):
                                          f'{variables["annotation_file"]}',
                                          f'{variables["annotation_type"]}',
                                          f'{variables["barcode"]}',
-                                         f'{variables["strain"]}'])
+                                         f'{variables["strain"]}'
+                                         ]
+                                        )
         
 def subprocess_cmd(command):
     try:
@@ -277,19 +289,24 @@ def subprocess_cmd(command):
 def test_functionalities():
     result_bowtie = subprocess.run(['bowtie2', '-h'], capture_output=True, text=True)
     if result_bowtie.returncode == 0:
-        print(f"{Fore.BLUE} {datetime.datetime.now().strftime('%c')} {Fore.RESET}[{Fore.GREEN}INFO{Fore.RESET}] Bowtie2 is working as intended.")
+        colourful_errors("INFO",
+            "Bowtie2 is working as intended.")
     else:
-        print(f"{Fore.BLUE} {datetime.datetime.now().strftime('%c')} {Fore.RESET}[{Fore.RED}FATAL{Fore.RESET}] Bowtie2 is not working as intended. Check instalation and/or that it is on path.")
-        
+        colourful_errors("FATAL",
+            "Bowtie2 is not working as intended. Check instalation and/or that it is on path.")
+
     result_blast = subprocess.run(['tblastn', '-h'], capture_output=True, text=True)
     if result_blast.returncode == 0:
-        print(f"{Fore.BLUE} {datetime.datetime.now().strftime('%c')} {Fore.RESET}[{Fore.GREEN}INFO{Fore.RESET}] Blast is working as intended.")
+        colourful_errors("INFO",
+            "Blast is working as intended.")
     else:
-        print(f"{Fore.BLUE} {datetime.datetime.now().strftime('%c')} {Fore.RESET}[{Fore.RED}FATAL{Fore.RESET}] Blast is not working as intended. Check instalation and/or that it is on path.")
-    
+        colourful_errors("FATAL",
+            "Blast is not working as intended. Check instalation and/or that it is on path.")
+
     if (result_blast.returncode == 0) & (result_bowtie.returncode == 0):
-        print(f"{Fore.BLUE} {datetime.datetime.now().strftime('%c')} {Fore.RESET}[{Fore.GREEN}INFO{Fore.RESET}] Testing Tnseeker. Please hold, this might take several minutes.")
-      
+        colourful_errors("INFO",
+            "Testing Tnseeker. Please hold, this might take several minutes.")
+
         data_dir = pkg_resources.resource_filename(__name__, 'data/test/')
         result_full = subprocess.run(["python","-m", "tnseeker", 
                                         "-s","test",
@@ -304,15 +321,17 @@ def test_functionalities():
                                         "--k"], capture_output=True, text=True)
         
         if result_full.returncode == 0:
-            print(f"{Fore.BLUE} {datetime.datetime.now().strftime('%c')} {Fore.RESET}[{Fore.GREEN}INFO{Fore.RESET}] Tnseeker is working as intended.")
+            colourful_errors("INFO",
+                "Tnseeker is working as intended.")
         else:
             print(result_full.stdout)
             print(result_full.stderr)
-            print(f"{Fore.BLUE} {datetime.datetime.now().strftime('%c')} {Fore.RESET}[{Fore.RED}FATAL{Fore.RESET}] Tnseeker is not working as intended. Check errors.")
-        
-    if (result_blast.returncode == 0) & (result_bowtie.returncode == 0) & (result_full.returncode == 0):
-        print(f"{Fore.BLUE} {datetime.datetime.now().strftime('%c')} {Fore.RESET}[{Fore.GREEN}INFO{Fore.RESET}] All tests passed.")
+            colourful_errors("FATAL",
+                "Tnseeker is not working as intended. Check errors.")
 
+    if (result_blast.returncode == 0) & (result_bowtie.returncode == 0) & (result_full.returncode == 0):
+        colourful_errors("INFO",
+                " All tests passed.")
     print("\n")
     
 def input_parser(variables):
@@ -346,6 +365,7 @@ def input_parser(variables):
     parser.add_argument("--sl5",nargs='?',const=None,help="5' gene trimming percent for essentiality determination (number between 0 and 1)")
     parser.add_argument("--sl3",nargs='?',const=None,help="3' gene trimming percent for essentiality determination (number between 0 and 1)")
     parser.add_argument("--tst",nargs='?',const=True,help="Test the program functionalities and instalations")
+    parser.add_argument("--cpu",nargs='?',const=None,help="Define the number of threads (must be and integer)")
 
     args = parser.parse_args()
                                                              
@@ -358,7 +378,7 @@ def input_parser(variables):
     print(f"{Fore.RED}    ██║   ██║ ╚████║ {Fore.RESET}███████║███████╗███████╗██║  ██╗███████╗██║  ██║")
     print(f"{Fore.RED}    ╚═╝   ╚═╝  ╚═══╝ {Fore.RESET}╚══════╝╚══════╝╚══════╝╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝")   
     
-    variables["version"]="1.0.7.3"
+    variables["version"]="1.0.7.4"
     
     print(f"{Fore.RED}            Version: {Fore.RESET}{variables['version']}")
     print("\n")  
@@ -369,7 +389,9 @@ def input_parser(variables):
         
     if (args.s is None) or (args.sd is None) or (args.ad is None) or (args.at is None) or (args.st is None):
         print(parser.print_usage())
-        raise ValueError(f" [{Fore.RED}FATAL{Fore.RESET}] No arguments given")
+        colourful_errors("FATAL",
+                 "No arguments given.")
+        raise ValueError
 
     variables["full"]=True
     if args.e is not None:
@@ -454,6 +476,11 @@ def input_parser(variables):
     variables["subdomain_length_down"]=1
     if args.sl3 is not None:
         variables["subdomain_length_down"]=args.sl3
+
+    if args.cpu is not None:
+        variables["cpus"]=int(args.cpu)
+    else:
+        variables["cpus"]=cpu()
     
     if args.st == "PE":
         variables["sequencing_files_r"] = args.sd_2
@@ -495,10 +522,15 @@ def main():
             variables["fastq_trimed"] = [variables['sequencing_files'],\
                                          variables['sequencing_files_r']]
             if variables["trim"]:
-                print(f"{Fore.BLUE} {datetime.datetime.now().strftime('%c')} {Fore.RESET}[{Fore.GREEN}INFO{Fore.RESET}] Getting that .fastq ready")
+
+                colourful_errors("INFO",
+                    "Getting that .fastq ready.")
+                
                 variables = tn_trimmer_paired(variables)
             
-            print(f"{Fore.BLUE} {datetime.datetime.now().strftime('%c')} {Fore.RESET}[{Fore.GREEN}INFO{Fore.RESET}] Aligning reads to the reference genome")
+            colourful_errors("INFO",
+                    "Aligning reads to the reference genome.")
+            
             bowtie_aligner_maker_paired(variables)
             
         elif variables["seq_type"] == "SE":
@@ -506,13 +538,20 @@ def main():
             variables["fastq_trimed"] = variables['sequencing_files']
 
             if variables["trim"]:
-                print(f"{Fore.BLUE} {datetime.datetime.now().strftime('%c')} {Fore.RESET}[{Fore.GREEN}INFO{Fore.RESET}] Getting that .fastq ready")
+                colourful_errors("INFO",
+                    "Getting that .fastq ready.")
+                
                 variables = tn_trimmer_single(variables)
+
             else:
-                print(f"{Fore.BLUE} {datetime.datetime.now().strftime('%c')} {Fore.RESET}[{Fore.GREEN}INFO{Fore.RESET}] Compiling those .fastq")
+                colourful_errors("INFO",
+                    "Compiling those .fastq.")
+                
                 variables = tn_compiler(variables)
             
-            print(f"{Fore.BLUE} {datetime.datetime.now().strftime('%c')} {Fore.RESET}[{Fore.GREEN}INFO{Fore.RESET}] Aligning reads to the reference genome")
+            colourful_errors("INFO",
+                    "Aligning reads to the reference genome.")
+
             bowtie_aligner_maker_single(variables)
         
         sam_parser(variables)
@@ -524,10 +563,13 @@ def main():
         insertions_plotter(variables)
     
     if variables["essential_find"]:
-        print(f"{Fore.BLUE} {datetime.datetime.now().strftime('%c')}{Fore.RESET} [{Fore.GREEN}INFO{Fore.RESET}] Infering essential genes")
+        colourful_errors("INFO",
+                    "Infering essential genes.")
+        
         essentials(variables)
     
-    print(f"{Fore.BLUE} {datetime.datetime.now().strftime('%c')} {Fore.RESET}[{Fore.GREEN}INFO{Fore.RESET}] Analysis Finished")
-    
+    colourful_errors("INFO",
+            "Analysis Finished.")
+
 if __name__ == "__main__":
-    main() 
+    main()

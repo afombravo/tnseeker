@@ -16,5 +16,4 @@ COPY . /data
 # Install tnseeker from PyPI
 RUN pip install tnseeker
 
-# Run tnseeker module by default
 CMD ["bash"]
