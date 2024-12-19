@@ -976,9 +976,10 @@ def cpu():
     If more than one is available, one of them is left to avoid clogging the computer,
     while the others are used by the program. '''
 
-    c = multiprocessing.cpu_count()
-    if c >= 2:
-        c -= 1
+    # c = multiprocessing.cpu_count()
+    # if c >= 2:
+    #     c -= 1
+    c = 1
     pool = multiprocessing.Pool(processes=c)
     return pool, c
 
