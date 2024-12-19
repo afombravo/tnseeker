@@ -1,5 +1,5 @@
 # Use an official Python runtime as a parent image
-FROM python:3.10-slim
+FROM python:3.10
 
 # Set the working directory in the container
 WORKDIR /data
@@ -14,7 +14,7 @@ RUN apt-get update && \
 COPY . /data
 
 # Install tnseeker from PyPI
-RUN pip install tnseeker --no-cache-dir
+RUN pip install tnseeker
 
 # Run tnseeker module by default
 CMD ["bash"]
