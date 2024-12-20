@@ -26,7 +26,7 @@ Tnseeker is under active developement and is available as is. Contact me if you 
 There are two ways of installing tnseeker:
 
 
-### 1. Recommended installation
+### 1. Recommended installation (using singularity)
 1.  Install singularity in your system 
 
 ```
@@ -72,10 +72,42 @@ tnseeker \
   --b2m 3 \
   --ig 100 
 ```
+When using HPC systems it is advisable to include the `--cpu` flag and specify the amount of threads.
 
 
 ---
-### 2. Alternative installation
+### 2. Recommended installation #2 (using docker)
+1.  Install docker in your system
+2.  Download the docker image from dockerhub
+```bash
+docker pull afombravo/tnseeker:latest
+```
+
+3.  Rename to just tnseeker
+```bash
+docker tag afombravo/tnseeker:latest tnseeker
+```
+
+Alternatively, download the docker file from this repo and build it yourself.
+```bash
+docker build --no-cache -t tnseeker .
+```
+
+4.  Start tnseeker docker image with the comand:
+```bash
+docker run -it -v "<local_path/to/all/your/data>:/data" tnseeker
+```
+
+5.  Start tnseeker with:
+```bash
+tnseeker -sd ./ -ad ./ <ALL OTHER TNSEEKER COMANDS HERE>
+```
+
+NOTE: all files required by tnseeker, such as .fasta, .fastq, .gb, or .gff, need to be in the local folder indicated in 4. You then can use the -sd and -ad flags as indicated here in 5.
+
+
+---
+### 3. Alternative installation
 The tnseeker pipeline requires Python3, Bowtie2, and BLAST, to be callable from the terminal (and added to path). 
 
 #### For local BLAST
@@ -115,8 +147,6 @@ An example use case is the folowing. See below the meaning of the input argument
 ```bash
 tnseeker -s BW25113 -sd ./ -ad ./ -at gb -st SE --tn AGATGTGTATAAGAGACAG --ph 10 --mq 40
 ```
-
-When using HPC systems it is advisable to include the `--cpu` flag and specify the amount of threads.
 
 
 ### File requirements
