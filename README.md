@@ -26,26 +26,31 @@ Tnseeker is under active developement and is available as is. Contact me if you 
 There are two ways of installing tnseeker:
 
 
-### 1. BEST INSTALATION METHOD
+### 1. Recommended installation
 1.  Install singularity in your system 
 
 ```
 conda create -n singularity -c conda-forge singularity -y
 ```
 
-2.  Download the docker image from dockerhub. This will write a singularity container named `tnseeker_latest.sif` into your current work directory.
+2.  Active the conda environment
+```
+conda activate singularity
+```
+
+3.  Download the docker image from dockerhub. This will write a singularity container named `tnseeker_latest.sif` into your current work directory.
 ```bash
 singularity pull docker://afombravo/tnseeker:latest
 ```
 
-3. Start an interactive session of the container. Importantly, you need to `--bind` all the input files. It is easiest if you put all input files into a single folder, as this is how `tnseeker` expects it's input. The results will be written into the same folder.
+4. Start an interactive session of the container. Importantly, you need to `--bind` all the input files. It is easiest if you put all input files into a single folder, as this is how `tnseeker` expects it's input. The results will be written into the same folder.
 Note: the `:rw` at the end of the path is crucial for singularity to obtain read/write permission and hence be able to compute.
 ```
 singularity shell --bind /path/to/folder/containing/all/input/files:/input_files:rw \
                   tnseeker_latest.sif
 ```
 
-4. Start a `tnseeker` run, like so:
+5. Start a `tnseeker` run, like so:
 
 ```
 cd /input_files; 
@@ -69,7 +74,7 @@ python -m tnseeker --cpu 4 \
 
 
 ---
-### 2. LESS OPTIMAL INSTALATION METHOD
+### 2. Alternative installation
 The tnseeker pipeline requires Python3, Bowtie2, and BLAST, to be callable from the terminal (and added to path). 
 
 #### For local BLAST
