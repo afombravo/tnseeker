@@ -54,19 +54,20 @@ singularity shell --bind /path/to/folder/containing/all/input/files:/input_files
 
 ```
 cd /input_files; 
-python -m tnseeker --cpu 4 \
-  -s PV_ATCC8482DSM1447_NT5001.1 \
+tnseeker \
+  --cpu 4 \
+  -s ORGANISM_FASTA/GB/GFF_NAME \
   -sd .  \
   -ad .  \
   -at gff \
   -st SE \
-  --tn TACGAAGACCGGGGACTTATCATCCAACCTGT \ 
+  --tn TN_SEQUENCE (ex: AGATTA) \ 
   --m 6 \
   --b \
-  --b1 ATGTCCACGAGGTGTACGAT \
-  --b2 CAGAATTGGGAGTCTACGAA \
+  --b1 UPSTREAM_BARCODE_SEQUENCE (ex: AGAGA) \
+  --b2 DOWNSTREAM_BARCODE_SEQUENCE (ex: ATATAT) \
   --ph 10 \
-  --mq 1 \
+  --mq 20 \
   --b1m 3 \
   --b2m 3 \
   --ig 100 
