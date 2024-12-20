@@ -27,29 +27,45 @@ There are two ways of installing tnseeker:
 
 
 ### 1. BEST INSTALATION METHOD
-1.  Install docker in your system
-2.  Download the docker image from dockerhub
-```bash
-docker pull afombravo/tnseeker:latest
+1.  Install singularity in your system 
+
 ```
-3.  Rename to just tnseeker
-```bash
-docker tag afombravo/tnseeker:latest tnseeker
-```
-Alternatively, download the docker file from this repo and build it yourself.
-```bash
-docker build --no-cache -t tnseeker .
-```
-4.  Start tnseeker docker image with the comand:
-```bash
-docker run -it -v "<local_path/to/all/your/data>:/data" tnseeker
-```
-5.  Start tnseeker with:
-```bash
-tnseeker -sd ./ -ad ./ <ALL OTHER TNSEEKER COMANDS HERE>
+conda create -n singularity -c conda-forge singularity -y
 ```
 
-NOTE: all files required by tnseeker, such as .fasta, .fastq, .gb, or .gff, need to be in the local folder indicated in 4. You then can use the -sd and -ad flags as indicated here in 5.
+2.  Download the docker image from dockerhub. This will write a singularity container named `tnseeker_latest.sif` into your current work directory.
+```bash
+singularity pull docker://afombravo/tnseeker:latest
+```
+
+3. Start an interactive session of the container. Importantly, you need to `--bind` all the input files. It is easiest if you put all input files into a single folder, as this is how `tnseeker` expects it's input. The results will be written into the same folder.
+Note: the `:rw` at the end of the path is crucial for singularity to obtain read/write permission and hence be able to compute.
+```
+singularity shell --bind /path/to/folder/containing/all/input/files:/input_files:rw \
+                  tnseeker_latest.sif
+```
+
+4. Start a `tnseeker` run, like so:
+
+```
+cd /input_files; 
+python -m tnseeker --cpu 4 \
+  -s PV_ATCC8482DSM1447_NT5001.1 \
+  -sd .  \
+  -ad .  \
+  -at gff \
+  -st SE \
+  --tn TACGAAGACCGGGGACTTATCATCCAACCTGT \ 
+  --m 6 \
+  --b \
+  --b1 ATGTCCACGAGGTGTACGAT \
+  --b2 CAGAATTGGGAGTCTACGAA \
+  --ph 10 \
+  --mq 1 \
+  --b1m 3 \
+  --b2m 3 \
+  --ig 100 
+```
 
 
 ---
