@@ -378,7 +378,7 @@ def input_parser(variables):
     print(f"{Fore.RED}    ██║   ██║ ╚████║ {Fore.RESET}███████║███████╗███████╗██║  ██╗███████╗██║  ██║")
     print(f"{Fore.RED}    ╚═╝   ╚═╝  ╚═══╝ {Fore.RESET}╚══════╝╚══════╝╚══════╝╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝")   
     
-    variables["version"]="1.0.7.4"
+    variables["version"]="1.1.0"
     
     print(f"{Fore.RED}            Version: {Fore.RESET}{variables['version']}")
     print("\n")  
@@ -556,8 +556,6 @@ def main():
         
         sam_parser(variables)
         if variables["remove"]:
-            if variables["barcode"]:
-                os.remove(f"{variables['directory']}/barcoded_align.sam")
             os.remove(f"{variables['directory']}/alignment.sam")
     
         insertions_plotter(variables)

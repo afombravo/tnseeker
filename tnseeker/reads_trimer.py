@@ -74,7 +74,7 @@ def barcodeID(sequence,sequence_bin,borders,miss_up,miss_down):
 def read_trimer(reading,sequences,quality_set,mismatches,trimming_len,miss_up,\
                 miss_down,quality_set_bar_up,quality_set_bar_down,borders="",barcode_allow=False):
     
-    processed_read,barcode_pool = [],[]
+    processed_read = []
     for read in reading:
         sequence = str(read[1],"utf-8")
         sequence_bin = seq2bin(sequence)
@@ -95,14 +95,14 @@ def read_trimer(reading,sequences,quality_set,mismatches,trimming_len,miss_up,\
             if (len(quality_set.intersection(quality)) == 0):
                 read[0],read[2] = str(read[0],"utf-8"),str(read[2],"utf-8")
                 read[0] = read[0].split(" ")[0]
-                processed_read.append(read)
                 if barcode_allow:
                     barcode = barcodeID(sequence,sequence_bin,borders,miss_up,miss_down)
                     if barcode is not None:
                         if (len(quality_set_bar_up.intersection(quality)) == 0) & (len(quality_set_bar_down.intersection(quality)) == 0):
-                            barcode_pool.append([f"{barcode}{read[0]}"])
+                            read[0] += f":BC:{barcode}"
+                processed_read.append(read)
 
-    return [processed_read,barcode_pool]
+    return processed_read
                 
 def extractor(fastq,folder_path,sequences,barcode,barcode_upstream,barcode_downstream,\
               mismatches,trimming_len,miss_up,miss_down,phred_up,phred_down,
@@ -164,30 +164,21 @@ def extractor(fastq,folder_path,sequences,barcode,barcode_upstream,barcode_downs
                         pool.join()
                             
                         result = [result.get() for result in result_objs]
-                        if not barcode:
-                            for trimmed,barcodes in result:
-                                count_trimed+=len(trimmed)
-                                write(trimmed, "/processed_reads_1.fastq", folder_path)
-                                
-                        else:
-                            for trimmed,barcodes in result:
-                                count_trimed+=len(trimmed)
-                                write(trimmed, "/processed_reads_1.fastq", folder_path)
-                                write(barcodes, "/barcodes_1.txt", folder_path)
+                        for trimmed in result:
+                            count_trimed+=len(trimmed)
+                            write(trimmed, "/processed_reads_1.fastq", folder_path)
+ 
                         read_bucket = []
+                        
         except Exception:
             colourful_errors("WARNING",
                 f'Error parsing {file}')
             
-    if not barcode:
-        trimmed,barcodes=read_trimer(read_bucket,transposon_seq,quality_set,mismatches,trimming_len,miss_up,miss_down,
-                                     quality_set_bar_up,quality_set_bar_down)
-        write(trimmed, "/processed_reads_1.fastq", folder_path)
-    else:
-        trimmed,barcodes=read_trimer(read_bucket,transposon_seq,quality_set,mismatches,trimming_len,miss_up,miss_down,
-                                     quality_set_bar_up,quality_set_bar_down,borders,True)
-        write(trimmed, "/processed_reads_1.fastq", folder_path)
-        write(barcodes, "/barcodes_1.txt", folder_path)
+
+    trimmed=read_trimer(read_bucket,transposon_seq,quality_set,mismatches,trimming_len,miss_up,miss_down,
+                                 quality_set_bar_up,quality_set_bar_down)
+    write(trimmed, "/processed_reads_1.fastq", folder_path)
+
     count_trimed+=len(trimmed)
     
     text_out = folder_path + "/trimming_log.log"

@@ -112,25 +112,6 @@ def subprocess_cmd(command):
 def extractor(name_folder, folder_path, pathing, paired_ended,barcode,\
               read_threshold,read_cut,annotation_file,ir_size_cutoff,cpus,pool,\
               map_quality_threshold = 42):
-    
-    def barcode_finder():
-        read = ""
-        barcode = {}
-        bar=None
-        with open(f"{folder_path}/barcodes_1.txt") as current:
-            for line in current:
-                if "@" not in line:
-                    if len(line[:-1]) != 0:
-                        bar = line[:-1]
-                    else:
-                        bar = None
-                        
-                if (bar is not None) & ("@" in line):
-                    read = line[:-1].split(" ")[0][1:]
-                    barcode[read] = bar
-                    bar = None
-
-        return barcode
 
     aligned_reads, aligned_valid_reads = 0, 0
     insertion_count = {}
@@ -139,23 +120,12 @@ def extractor(name_folder, folder_path, pathing, paired_ended,barcode,\
     if paired_ended=="PE":
         flag_list = [83, 99] #[16] for single ended data #99 and 83 means that the read is the first in pair (only paired ended reads are considered as valid)
     
-    file = pathing[0]
-    if barcode:
+    sam_file = pathing[0]
 
-        colourful_errors("INFO",
-            "Linking barcodes to insertion positions.")
-        
-        file = f"{folder_path}/barcoded_align.sam"
-        subprocess_cmd([pkg_resources.resource_filename(__name__, 'data/barcode2sam.sh'),
-                       f"{folder_path}/alignment.sam",
-                       f"{folder_path}/barcodes_1.txt",
-                       file,
-                       folder_path])
-    
     colourful_errors("INFO",
         "Parsing Bowtie alignments into an insertion matrix.")
     
-    with open(file) as current:
+    with open(sam_file) as current:
         for line in current:
             sam = line.split('\t')
             if (sam[0][0] != "@") and (sam[2] != '*'): #ignores headers and unaligned contigs
@@ -205,8 +175,8 @@ def extractor(name_folder, folder_path, pathing, paired_ended,barcode,\
                     
                     if barcode:
                         bar = None
-                        if "BC:Z:" in sam[-1]:
-                            bar = sam[-1][:-1].split(":")[2]
+                        if ":BC:" in sam[0]:
+                            bar = sam[0].split(":BC:" )[1]
                         if bar != None:
                             if bar in insertion_count[key].barcode:
                                 insertion_count[key].barcode[bar] += 1
@@ -229,6 +199,8 @@ def extractor(name_folder, folder_path, pathing, paired_ended,barcode,\
                         break
                 else:
                     batch_goals[i].add(key)
+
+    colourful_errors("INFO","Annotating insertions.")
 
     result_objs = []
     for batch in batch_goals:
