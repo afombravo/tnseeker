@@ -283,7 +283,7 @@ def annotation_processer(insertion_count_filtered,read_threshold,read_cut,
 
 def dict_filter(dictionary,read_cut):
     for key in list(dictionary):
-        if dictionary[key].count < read_cut:
+        if dictionary[key].count <= read_cut:
             del dictionary[key]
     return dictionary
 
@@ -446,6 +446,8 @@ def gene_parser_genbank(annotation_file,insertion_count):
                             insertion_count[key].product = product
                             insertion_count[key].gene_orient = orientation
                             insertion_count[key].relative_gene_pos = (int(insertion_count[key].local) - start) / domain_size
+                            if orientation == "-":
+                                insertion_count[key].relative_gene_pos = 1 - insertion_count[key].relative_gene_pos
 
         contigs[rec.id] = len(rec.seq)
         genes = list(dict.fromkeys(genes))
@@ -498,6 +500,8 @@ def gene_parser_gff(annotation_file,insertion_count):
                             insertion_count[key].product =  feature['product']
                             insertion_count[key].gene_orient = orientation
                             insertion_count[key].relative_gene_pos = (int(insertion_count[key].local) - start) / domain_size
+                            if orientation == "-":
+                                insertion_count[key].relative_gene_pos = 1 - insertion_count[key].relative_gene_pos
                 
                 key = (start,end,orientation,gene,contig)
                 genes.append(key)
