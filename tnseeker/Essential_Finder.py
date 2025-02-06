@@ -1210,7 +1210,7 @@ def final_compiler(optimal_basket, pvalue, euclidean_points):
                               [optimal_basket[gene].contig] +
                               [optimal_basket[gene].identity] +
                               [optimal_basket[gene].product] +
-                              [int(optimal_basket[gene].significant[domain].dom_len/2)] +
+                              [int(optimal_basket[gene].significant[domain].dom_len)] +
                               [optimal_basket[gene].significant[domain].ratio_orient] +
                               [optimal_basket[gene].significant[domain].orient_pvalue] +
                               [optimal_basket[gene].significant[domain].domain_part] +

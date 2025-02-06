@@ -11,19 +11,19 @@
 Tnseeker is an advanced pipeline tailored for transposon insertion sequencing (Tn-Seq) analysis. 
 
 It performs an array of tasks: 
-1. Read trimming based on the presence of transposon sequences & extraction of associated linked barcodes
+1. Read trimming based on the presence of transposon sequences & extraction of associated linked barcodes (if present)
 2. Alignment to reference genome (bowtie2)
 3. Links genomic locations (using .gff or .gb files as input) with transposon insertion locations
 4. Infer essential genes based on global and local (contig wise) transposon insertion densities
 
-What truly distinguishes Tnseeker from other tools is its unique capability to automatically infer and adjust threshold/cutoff parameters. This negates the need for intricate user input, allowing for a more precise determination of gene essentiality based on the data. 
+What truly distinguishes Tnseeker from other tools is its unique capability to automatically infer and adjust threshold/cutoff parameters. This negates the need for intricate user input, allowing for a more hands-off determination of gene essentiality based on the data. 
 
-Tnseeker is also compatible with any transposon disruption experiment. Be it Tn5, HIMAR, or anything else. Hence, Tnseeker is versatile enough to handle all Tn-Seq datasets.
+Tnseeker is also compatible with any transposon disruption experiment, be it Tn5, HIMAR, or anything else. Tnseeker is thus versatile enough to handle all Tn-Seq datasets.
 
-Tnseeker is under active developement and is available as is. Contact me if you are interested in using the program or have any questions. Bugs can be expected. Please report any weird or unintented behaviour. 
+Tnseeker is under active developement and is available as is. Contact me if you are interested in adapting the program or have any questions. Bugs can be expected. Please report any weird or unintented behaviour. 
 
 ## Instalation
-There are two ways of installing tnseeker:
+There are two main ways of installing tnseeker:
 
 
 ### 1. Recommended installation (using singularity)
@@ -50,7 +50,7 @@ singularity shell --bind /path/to/folder/containing/all/input/files:/input_files
                   tnseeker_latest.sif
 ```
 
-5. Start a `tnseeker` run, like so:
+5. Start a `tnseeker` run with, for example, the following command:
 
 ```
 cd /input_files; 
@@ -136,7 +136,7 @@ tnseeker
 ---
 ## Running Tnseeker
 
-Tnseeker also has a test mode, where the blast, Bowtie2 instalations are tested, and a small run on a test dataset is performed.
+Tnseeker also has a test mode where the blast and Bowtie2 instalations are tested, and a small run on a test dataset is performed.
 
 ```bash
 tnseeker --tst
@@ -240,7 +240,7 @@ tnseeker requires several input files:
 ---
 ## Python Dependencies
 
-tnseeker requires several dependencies, all automatically instalable
+Tnseeker requires several dependencies, all automatically instalable.
 A notable exception is the poibin module, which is available in the current tnseeker folder (you as the user don't need to do anything else), and can be originally be found here: https://github.com/tsakim/poibin
 
 
