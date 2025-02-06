@@ -273,11 +273,11 @@ def annotation_processer(insertion_count_filtered,read_threshold,read_cut,
     elif annotation_file.endswith(".gff"):
         insertion_count_filtered,genes,contigs = gene_parser_gff(annotation_file,insertion_count_filtered)
         
-    insertion_count_filtered = inter_gene_annotater(annotation_file,insertion_count_filtered,ir_size_cutoff,genes,contigs)
+    insertion_count_filtered = inter_gene_annotater(insertion_count_filtered,ir_size_cutoff,genes,contigs)
     
     barcoded_insertions,insertions = [],[]
     if barcode:
-        barcoded_insertions,insertions = insert_parser(insertion_count_filtered,name_folder,folder_path,barcode)
+        barcoded_insertions,insertions = insert_parser(insertion_count_filtered)
 
     return insertion_count_filtered,barcoded_insertions,insertions
 
@@ -287,7 +287,7 @@ def dict_filter(dictionary,read_cut):
             del dictionary[key]
     return dictionary
 
-def insert_parser(insertion_count,name_folder,folder_path,barcode):    
+def insert_parser(insertion_count):    
     insertions,barcoded_insertions = [],[]
 
     for key in insertion_count: 
@@ -341,19 +341,19 @@ def annotate_barcodes_writer(barcoded_insertions,insertions,name_folder,folder_p
     output_file_path = os.path.join(folder_path, name)
     csv_writer(output_file_path,barcoded_insertions)
 
-def inter_gene_annotater(annotation_file,insertion_count,ir_size_cutoff,genes,contigs):
+def inter_gene_annotater(insertion_count,ir_size_cutoff,genes,contigs):
 
     ir_annotation = {}
     count = 0
     for i,gene in enumerate(genes[:-1]):
         contig = gene[-1]
         if contig == genes[i+1][-1]: #same contigs
-            gene_down_start_border = ir_size_cutoff + gene[1]
-            gene_up_start_border = genes[i+1][0] - ir_size_cutoff
-            domain_size = gene_up_start_border - gene_down_start_border
+            gene_up_start_border = ir_size_cutoff + gene[1]
+            gene_down_start_border = genes[i+1][0] - ir_size_cutoff
+            domain_size = gene_down_start_border - gene_up_start_border
             if domain_size >= 1:
                 count += 1
-                ir_annotation[f'IR_{count}_{gene[3]}_{gene[2]}_UNTIL_{genes[i+1][3]}_{gene[2]}'] = (gene[1],genes[i+1][0],domain_size,contig)
+                ir_annotation[f'IR_{count}_{gene[3]}_{gene[2]}_UNTIL_{genes[i+1][3]}_{gene[2]}'] = (gene_up_start_border,gene_down_start_border,domain_size,contig)
 
         if contig != genes[i+1][-1]:
 
@@ -363,7 +363,7 @@ def inter_gene_annotater(annotation_file,insertion_count,ir_size_cutoff,genes,co
                 count += 1
                 ir_name = f'IR_{count}_{gene[3]}_{gene[2]}_contig_{contig}_-end'
                 if ir_name not in ir_annotation:
-                    ir_annotation[ir_name] = (genes[-1][1],contigs[contig],domain_size,contig)
+                    ir_annotation[ir_name] = (genes[-1][1] + ir_size_cutoff,contigs[contig],domain_size,contig)
 
     circle_closer = genes[-1][1] + ir_size_cutoff 
     domain_size = contigs[contig] - circle_closer
@@ -371,14 +371,14 @@ def inter_gene_annotater(annotation_file,insertion_count,ir_size_cutoff,genes,co
         count += 1
         ir_name = f'IR_{count}_{genes[-1][3]}_{genes[-1][2]}_contig_{contig}_-end'
         if ir_name not in ir_annotation:
-            ir_annotation[ir_name] = (genes[-1][1],contigs[contig],domain_size,contig)
+            ir_annotation[ir_name] = (circle_closer,contigs[contig],domain_size,contig)
 
     domain_size = genes[0][0] - ir_size_cutoff
     if domain_size  >= 1:
         count += 1
         ir_name = f'IR_{count}_contig_{contig}_-start_{genes[0][3]}_{genes[0][2]}'
         if ir_name not in ir_annotation:
-           ir_annotation[ir_name] = (0,genes[0][0],domain_size,contig)
+           ir_annotation[ir_name] = (0,domain_size,domain_size,contig)
     
     for ir in ir_annotation:
         for key in insertion_count:
