@@ -33,7 +33,8 @@ setup(
                            "scipy == 1.12.0",
                            "seaborn == 0.13.2",
                            "statsmodels == 0.14.1",
-                           "colorama"],
+                           "colorama",
+                           "fast2q >= 2.7.4"],
         
         entry_points={
         'console_scripts': [

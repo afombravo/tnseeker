@@ -765,11 +765,9 @@ def inter_gene_annotater(basket, genes):
         gene = gene_entry[1]
         gene_next = genes[i+1][1]
         if contig == genes[i+1][-1]:  # same contigs
-            gene_down_start_border = variables.ir_size_cutoff + \
-                basket[gene].start
-            gene_up_start_border = basket[gene_next].end - \
-                variables.ir_size_cutoff
-            domain_size = gene_up_start_border - gene_down_start_border
+            gene_up_start_border = basket[gene].end + variables.ir_size_cutoff
+            gene_down_start_border = basket[gene_next].start - variables.ir_size_cutoff
+            domain_size = gene_down_start_border - gene_up_start_border
             if domain_size >= 1:
                 count += 1
                 ident = f'IR_{count}_{basket[gene].gene}_{basket[gene].orientation}_UNTIL_{basket[gene_next].gene}_{basket[gene_next].orientation}'

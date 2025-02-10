@@ -142,7 +142,7 @@ Tnseeker also has a test mode where the blast and Bowtie2 instalations are teste
 tnseeker --tst
 ```
 
-An example use case is the folowing. See below the meaning of the input arguments:
+A quick to use example case is the folowing. See below the meaning of the input arguments:
 
 ```bash
 tnseeker -s BW25113 -sd ./ -ad ./ -at gb -st SE --tn AGATGTGTATAAGAGACAG --ph 10 --mq 40
@@ -162,80 +162,76 @@ tnseeker requires several input files:
 ---
 
 
-## Optional Arguments:
+## Optional Arguments and their meaning:
 
   -h, --help   show this help message and exit
 
-  -s S         Strain name. Must match the annotation (FASTA/GB) file
-               names
+  -s [S]        Strain name. Must match the annotation (FASTA/GB) file names
 
-  -sd SD       The full path to the sequencing files FOLDER
+  -sd [SD]      The full path to the sequencing files FOLDER
 
-  --sd_2 SD_2  The full path to the pair ended sequencing files FOLDER (needs
-               to be different from the first folder)
+  --sd_2 [SD_2] The full path to the pair ended sequencing files FOLDER (needs
+                to be different from the first folder. In this case keep both ends in different folders.)
 
-  -ad AD       The full path to the directory with the .gb and .fasta files
+  -ad [AD]      The full path to the directory with the .gb and .fasta files
 
-  -at AT       Annotation Type (Genbank)
+  -at [AT]      Annotation Type (Genbank: -at gb | gff: -at gff)
 
-  -st ST       Sequencing type (Paired-ended (PE)/Single-ended(SE)
+  -st [ST]      Sequencing type (Paired-ended (PE)/Single-ended(SE))
 
   --tst [TST]  Test mode to confirm everything works as expected.
 
-  --tn [TN]    Transposon border sequence (tn5: GATGTGTATAAGAGACAG). Required for triming and proper mapping
+  --tn [TN]    Transposon border sequence (tn5: GATGTGTATAAGAGACAG). Required for triming and better/faster mapping.
 
   --m [M]      Mismatches in the transposon border sequence (default is 0)
 
   --k [K]      Remove intermediate files. Default is yes, remove.
 
-  --e [E]      Run only the essential determing script. required the
+  --e [E]      Run only the essential determing script. Requires the
                all_insertions_STRAIN.csv file to have been generated first.
 
   --t [T]      Trims to the indicated nucleotides length AFTER finding the
-               transposon sequence. For example, 100 would mean to keep the
+               transposon sequence. For example, 100 would mean to keep the first
                100bp after the transposon (this trimmed read will be used for
                alignement after)
 
-  --b [B]      Run with barcode extraction
+  --b [B]      Run with barcode extraction.
 
-  --b1 [B1]    upstream barcode sequence (example: ATC)
+  --b1 [B1]    upstream barcode search sequence (example: ATC)
 
-  --b2 [B2]    downstream barcode sequence (example: CTA)
+  --b2 [B2]    downstream barcode search sequence (example: CTA)
 
-  --b1m [B1M]  upstream barcode sequence mismatches
+  --b1m [B1M]  upstream barcode search sequence mismatches (default is 0)
 
-  --b2m [B2M]  downstream barcode sequence mismatches
+  --b2m [B2M]  downstream barcode search sequence mismatches (default is 0)
 
-  --b1p [B1P]  upstream barcode sequence Phred-score filtering. Default is no
-               filtering
+  --b1p [B1P]  upstream barcode sequence Phred-score filtering. (default is 1)
 
-  --b2p [B2P]  downstream barcode sequence Phred-score filtering. Default is
-               no filtering
-  --rt [RT]    Read threshold number
+  --b2p [B2P]  downstream barcode sequence Phred-score filtering. (default is 1)
 
-  --ne [NE]    Run without essential Finding
+  --rt [RT]    Read threshold number in absolute reads number (default is 0). All insertions with <= reads will be removed.
+
+  --ne [NE]    Run without essential finding
 
   --ph [PH]    Phred Score (removes reads where nucleotides have lower phred
-               scores)
+               scores) (default is 1)
 
-  --mq [MQ]    Bowtie2 MAPQ threshold
+  --mq [MQ]    Bowtie2 MAPQ threshold (default is 42)
 
-  --ig [IG]    The number of bp up and down stream of any gene to be
-               considered an intergenic region
+  --ig [IG]    The number of bp up and down stream of any gene that will be ignored before a non maped DNA strech is considered an intergenic region.
 
-  --pv [PV]    Essential Finder pvalue threshold for essentiality
-               determination
+  --pv [PV]    Starting pvalue threshold for essentiality determination. Default is 0.05. p-value will be lowered iterativelly based on the optimization of the gold set essential genes. If no genes are present. The value will be the default one (or other if indicated)
 
-  --dut [DUT]  fraction of the minimal amount of 'too small domains' in a gene before the entire gene is deemed
-               uncertain for essentiality inference
-  
-  --sl5 [SL5]  5' gene trimming percent for essentiality determination (number
+  --dut [DUT]  The correct essentiality calling of features that have both 'too small domains' and 'non-essential' sub-gene divisions needs a special case. 
+               When the latter two are present, if 'too small domains' > ('too small domains' + 'non-essential') * dut-value (The default is 0.75), then a feature will be demeed 'too small domains' in its entirity. Otherwise, 'non-essential'.
+
+  --sl5 [SL5]  5' gene trimming percent to be ignored for essentiality determination (number
                between 0 and 1)
 
-  --sl3 [SL3]  3' gene trimming percent for essentiality determination (number
+  --sl3 [SL3]  3' gene trimming percent to be ignored for essentiality determination (number
                between 0 and 1)
 
-  --cpu [CPU]  Define the number of threads (must be and integer). Advisable when using HPC systems.
+  --cpu [CPU]  Define the number of threads (must be an integer). Advisable when using HPC systems.
 
 ---
 ## Python Dependencies

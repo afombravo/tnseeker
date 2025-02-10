@@ -2,55 +2,15 @@ import os
 import multiprocessing
 from tnseeker.extras.helper_functions import colourful_errors
 import sys
-from numba import njit
-import numpy as np
 import gzip
 import glob
+from fast2q.fast2q import border_finder,seq2bin
 
 """ This script is for processing and trimming high-throughput sequencing data. 
     It takes as input a fastq file, a folder path to store the output, the 
     sequence of the transposon used in the experiment, and some optional 
     parameters such as whether to consider barcode information and the Phred 
     score quality threshold."""
-
-def seq2bin(sequence):
-    
-    """ Converts a string to binary, and then to 
-    a numpy array in int8 format"""
-
-    return np.array(bytearray(sequence, 'utf8'), dtype=np.int8)
-
-@njit
-def binary_subtract(array1,array2,mismatch):
-    
-    """ Used for matching 2 sequences based on the allowed mismatches.
-    Requires the sequences to be in numerical form"""
-    
-    miss=0
-    for arr1,arr2 in zip(array1,array2):
-        if arr1-arr2 != 0:
-            miss += 1
-        if miss>mismatch:
-            return 0
-    return 1
-
-@njit
-def imperfect_find(read,seq,mismatch,start_place=0): 
-    
-    """ Matches 2 sequences (after converting to int8 format)
-    based on the allowed mismatches. Used for sequencing searching
-    a start/end place in a read"""
-    
-    s=seq.size
-    r=read.size
-    fall_over_index = r-s-1
-    for i,bp in enumerate(read[start_place:]): 
-        comparison = read[start_place+i:s+start_place+i]
-        finder = binary_subtract(seq,comparison,mismatch)
-        if i > fall_over_index:
-            return None
-        if finder != 0:
-            return i+start_place
 
 def write(listing, name, folder_path):
     text_out = folder_path + name
@@ -63,10 +23,10 @@ def write(listing, name, folder_path):
                 text_file.write(item1 + "\n")
 
 def barcodeID(sequence,sequence_bin,borders,miss_up,miss_down):
-    border_up = imperfect_find(sequence_bin,borders[0],miss_up)
+    border_up = border_finder(borders[0],sequence_bin,miss_up)
     if border_up is not None:
         start_place = border_up+len(borders[0])
-        border_down = imperfect_find(sequence_bin,borders[1],miss_down,start_place)
+        border_down = border_finder(borders[1],sequence_bin,miss_down,start_place)
         if border_down is not None:
             return sequence[start_place:border_down]
     return None
@@ -80,7 +40,7 @@ def read_trimer(reading,sequences,quality_set,mismatches,trimming_len,miss_up,\
         sequence_bin = seq2bin(sequence)
         quality = str(read[3],"utf-8")
 
-        border_find = imperfect_find(sequence_bin,sequences,mismatches) 
+        border_find = border_finder(sequences,sequence_bin,mismatches) 
         if border_find is not None:
             
             start = border_find+len(sequences)
