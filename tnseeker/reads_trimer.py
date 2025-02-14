@@ -1,16 +1,14 @@
 import os
 import multiprocessing
-from tnseeker.extras.helper_functions import colourful_errors
 import sys
 import gzip
-import glob
 from fast2q.fast2q import border_finder,seq2bin
+from tnseeker.extras.helper_functions import colourful_errors,file_finder,variables_parser
 
-""" This script is for processing and trimming high-throughput sequencing data. 
-    It takes as input a fastq file, a folder path to store the output, the 
-    sequence of the transposon used in the experiment, and some optional 
-    parameters such as whether to consider barcode information and the Phred 
-    score quality threshold."""
+""" This script is for processing and trimming fastq files. 
+    It takes as input a fastq file, a folder path to store the output, 
+    and some optional parameters such as whether to consider barcode 
+    information and the Phred score quality threshold."""
 
 def write(listing, name, folder_path):
     text_out = folder_path + name
@@ -22,72 +20,68 @@ def write(listing, name, folder_path):
             for item1 in item:
                 text_file.write(item1 + "\n")
 
-def barcodeID(sequence,sequence_bin,borders,miss_up,miss_down):
-    border_up = border_finder(borders[0],sequence_bin,miss_up)
+def barcodeID(sequence,sequence_bin):
+    border_up = border_finder(variables["borders_bin"][0],sequence_bin,variables['barcode_up_miss'])
     if border_up is not None:
-        start_place = border_up+len(borders[0])
-        border_down = border_finder(borders[1],sequence_bin,miss_down,start_place)
+        start_place = border_up+len(variables["borders_bin"][0])
+        border_down = border_finder(variables["borders_bin"][1],sequence_bin,variables['barcode_down_miss'],start_place)
         if border_down is not None:
             return sequence[start_place:border_down]
     return None
 
-def read_trimer(reading,sequences,quality_set,mismatches,trimming_len,miss_up,\
-                miss_down,quality_set_bar_up,quality_set_bar_down,borders="",barcode_allow=False):
+def read_trimer(read_chunk):
     
     processed_read = []
-    for read in reading:
+    for read in read_chunk:
         sequence = str(read[1],"utf-8")
         sequence_bin = seq2bin(sequence)
         quality = str(read[3],"utf-8")
 
-        border_find = border_finder(sequences,sequence_bin,mismatches) 
+        border_find = border_finder(variables["sequence_bin"],sequence_bin,variables["tn_mismatches"]) 
         if border_find is not None:
             
-            start = border_find+len(sequences)
-            if trimming_len != -1:
-                end = start+trimming_len
+            start = border_find+len(variables["sequence_bin"])
+            if variables['trimmed_after_tn'] != -1:
+                end = start+variables['trimmed_after_tn']
                 read[1] = sequence[start:end]
                 read[3] = quality[start:end]
             else:
                 read[1] = sequence[start:]
                 read[3] = quality[start:]
 
-            if (len(quality_set.intersection(quality)) == 0):
+            if (len(variables["quality_set"].intersection(quality)) == 0):
                 read[0],read[2] = str(read[0],"utf-8"),str(read[2],"utf-8")
                 read[0] = read[0].split(" ")[0]
-                if barcode_allow:
-                    barcode = barcodeID(sequence,sequence_bin,borders,miss_up,miss_down)
+                if variables["barcode"]:
+                    barcode = barcodeID(sequence,sequence_bin)
                     if barcode is not None:
-                        if (len(quality_set_bar_up.intersection(quality)) == 0) & (len(quality_set_bar_down.intersection(quality)) == 0):
+                        if (len(variables["quality_set_bar_up"].intersection(quality)) == 0) & (len(variables["quality_set_bar_down"].intersection(quality)) == 0):
                             read[0] += f":BC:{barcode}"
                 processed_read.append(read)
 
     return processed_read
                 
-def extractor(fastq,folder_path,sequences,barcode,barcode_upstream,barcode_downstream,\
-              mismatches,trimming_len,miss_up,miss_down,phred_up,phred_down,
-              cpus,pool,phred = 1):
+def extractor():
     
-    transposon_seq = seq2bin(sequences)  
+    variables["sequence_bin"] = seq2bin(variables["sequence"])  
     reading = []
     read_bucket=[]
     divider = 250000
     count_total=0
     count_trimed=0
     quality_list = '!"#$%&' + "'()*+,-/0123456789:;<=>?@ABCDEFGHI" #Phred score
-    if phred < 1:
-        phred = 1
-    quality_set = set(quality_list[:phred-1])
+    if variables["phred"] < 1:
+        variables["phred"] = 1
+    variables["quality_set"] = set(quality_list[:variables["phred"]-1])
     
-    quality_set_bar_up,quality_set_bar_down = None,None
-    if barcode:
-        borders = [seq2bin(barcode_upstream),seq2bin(barcode_downstream)]
-        quality_set_bar_up = set(quality_list[:phred_up-1])
-        quality_set_bar_down = set(quality_list[:phred_down-1])
+    if variables["barcode"]:
+        variables["borders_bin"] = [seq2bin(variables["barcode_up"]),seq2bin(variables["barcode_down"])]
+        variables["quality_set_bar_up"] = set(quality_list[:variables["barcode_up_phred"]-1])
+        variables["quality_set_bar_down"] = set(quality_list[:variables["barcode_down_phred"]-1])
 
-    file_number = len(fastq)
+    file_number = len(variables['fastq_file'])
     file_counter = 0
-    for file in fastq:
+    for file in variables['fastq_file']:
         file_counter += 1
         colourful_errors("INFO",
             f"Processing {file_counter} out of {file_number} fastq files.")
@@ -101,24 +95,17 @@ def extractor(fastq,folder_path,sequences,barcode,barcode_upstream,barcode_downs
                         reading=[]
                         count_total+=1
                         
-                    if len(read_bucket)>=cpus*divider:
-                        pool = multiprocessing.Pool(processes = cpus)
+                    if len(read_bucket)>=variables['cpus']*divider:
+                        pool = multiprocessing.Pool(processes = variables['cpus'])
                         result_objs,subdivied = [],[]
                         z, spliter_mid=0,divider
-                        for i in range(cpus):
+                        for i in range(variables['cpus']):
                             subdivied.append(read_bucket[z:spliter_mid])
                             z += divider
                             spliter_mid += divider
 
-                        for read in subdivied:
-                            if not barcode:
-                                result=pool.apply_async(read_trimer, 
-                                                        args=((read,transposon_seq,quality_set,mismatches,trimming_len,miss_up,miss_down,\
-                                                               quality_set_bar_up,quality_set_bar_down)))
-                            else:
-                                result=pool.apply_async(read_trimer, 
-                                                        args=((read,transposon_seq,quality_set,mismatches,trimming_len,miss_up,miss_down,\
-                                                               quality_set_bar_up,quality_set_bar_down,borders,True)))
+                        for read_chunk in subdivied:
+                            result=pool.apply_async(read_trimer,args=(read_chunk,))
                             result_objs.append(result)
                         pool.close()
                         pool.join()
@@ -126,31 +113,27 @@ def extractor(fastq,folder_path,sequences,barcode,barcode_upstream,barcode_downs
                         result = [result.get() for result in result_objs]
                         for trimmed in result:
                             count_trimed+=len(trimmed)
-                            write(trimmed, "/processed_reads_1.fastq", folder_path)
- 
+                            write(trimmed, "/processed_reads_1.fastq", variables['directory'])
                         read_bucket = []
                         
-        except Exception:
-            colourful_errors("WARNING",
-                f'Error parsing {file}')
+        except Exception as e:
+            colourful_errors("WARNING",f'Error parsing {file} due to {e}')
             
-
-    trimmed=read_trimer(read_bucket,transposon_seq,quality_set,mismatches,trimming_len,miss_up,miss_down,
-                                 quality_set_bar_up,quality_set_bar_down)
-    write(trimmed, "/processed_reads_1.fastq", folder_path)
+    trimmed=read_trimer(read_bucket)
+    write(trimmed, "/processed_reads_1.fastq", variables['directory'])
 
     count_trimed+=len(trimmed)
-    
-    text_out = folder_path + "/trimming_log.log"
+    text_out = variables['directory'] + "/trimming_log.log"
     with open(text_out, "w+") as text_file:
-        text_file.write(f"Total reads trimmed: {count_trimed}\nTotal reads in file: {count_total}\nPercent of passing reads: {count_trimed/count_total*100}\n")
-    read_bucket,result = [],[]
+        text_file.write(f"""    ####\nTN TRIMMING INFO\n    ####\n\nTotal reads trimmed: {count_trimed}\nTotal reads in file: {count_total}\nPassing reads: {round(count_trimed/count_total*100,2)}%\n
+                            ####\nBOWTIE2 INFO\n    ####\n\n""")
 
-def paired_ended_rearrange(fastq2,folder_path):
+def paired_ended_rearrange():
+    fastq2=file_finder(variables['sequencing_files_r'],['*.gz'])
     names=set()
     duplicated=set()
     reading = []
-    with open(folder_path+"/processed_reads_1.fastq") as current:
+    with open(variables['directory']+"/processed_reads_1.fastq") as current:
         for line in current:
             reading.append(line[:-1])
             if len(reading) == 4: 
@@ -183,58 +166,37 @@ def paired_ended_rearrange(fastq2,folder_path):
                         reading[3]=str(reading[3],"utf-8")
                         read_bucket.append(reading)
                         if len(read_bucket)>1000000:
-                            write(read_bucket, "/processed_reads_2.fastq", folder_path)
+                            write(read_bucket, "/processed_reads_2.fastq", variables['directory'])
                             read_bucket=[]
                     reading=[]
                         
-    write(read_bucket, "/processed_reads_2.fastq", folder_path)
-   
-def folder_sequence_parser(folder):
-    pathing = []
-    for exten in ['*.gz']:
-        for filename in glob.glob(os.path.join(folder, exten)):
-            pathing.append(filename) 
-    return pathing
+    write(read_bucket, "/processed_reads_2.fastq", variables['directory'])
 
 def main(argv):
 
-    fastq1=folder_sequence_parser(argv[0])
-    folder_path = argv[1] 
-    sequences = argv[2]
-    paired = argv[3]
-    phred = int(argv[5])
-    mismatches = int(argv[-3])
-    trimming_len = int(argv[-2])
-    cpus = int(argv[-1])
-    pool = multiprocessing.Pool(processes = cpus)
-    
-    barcode,barcode_upstream,barcode_downstream,miss_up,miss_down,phred_up,phred_down = False,None,None,None,None,None,None
-    if argv[4] == "True":
-        barcode = True
-        barcode_upstream = argv[-9]
-        barcode_downstream = argv[-8]
-        miss_up = int(argv[-7])
-        miss_down = int(argv[-6])
-        phred_up = int(argv[-5])
-        phred_down = int(argv[-4])
+    global variables
+    variables = variables_parser(argv)
+    variables['fastq_file']=file_finder(variables['sequencing_files'],['*.gz'])
+    variables['phred'] = int(variables['phred'])
+    variables['tn_mismatches'] = int(variables['tn_mismatches'])
+    variables['trimmed_after_tn'] = int(variables['trimmed_after_tn'])
+    variables["barcode"] = variables["barcode"] == "True"
+    variables["barcode_up"] = None if variables["barcode_up"] == "None" else variables["barcode_up"]
+    variables["barcode_down"] = None if variables["barcode_down"] == "None" else variables["barcode_down"]
+    variables["barcode_up_miss"] = int(variables["barcode_up_miss"])
+    variables["barcode_down_miss"] = int(variables["barcode_down_miss"]) 
+    variables["barcode_up_phred"] = int(variables["barcode_up_phred"]) 
+    variables["barcode_down_phred"] = int(variables["barcode_down_phred"]) 
+    variables['cpus'] = int(variables['cpus'])
+    variables['pool'] = multiprocessing.Pool(processes = variables['cpus'])
 
-    try:
-        extractor(fastq1,folder_path,sequences,barcode,barcode_upstream,\
-                  barcode_downstream,mismatches,trimming_len,miss_up,miss_down,\
-                  phred_up,phred_down,cpus,pool,phred)
-    except Exception as e:
-        print(e)
-    
-    if paired == "PE":
-        fastq2=folder_sequence_parser(argv[6])
-        paired_ended_rearrange(fastq2,folder_path)
+    extractor()
+
+    if variables['seq_type'] == "PE":
+        if 'sequencing_files_r' in variables:
+            paired_ended_rearrange()
             
 if __name__ == "__main__":
-    if len(sys.argv) > 7:
-        argv = sys.argv[1:13] if sys.argv[4] == "PE" else sys.argv[1:12]
-        if argv[4] == "True":
-            argv.append(sys.argv[-7],sys.argv[-6],sys.argv[-5])
-    main(argv)
-    
+    main(sys.argv[0])
     multiprocessing.set_start_method("spawn")
 

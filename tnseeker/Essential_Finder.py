@@ -1,12 +1,11 @@
 import statsmodels.stats.multitest
 from Bio import SeqIO
 import os
-import glob
 import numpy as np
 import scipy
 import re
 from tnseeker.extras.possion_binom import PoiBin
-from tnseeker.extras.helper_functions import colourful_errors,csv_writer
+from tnseeker.extras.helper_functions import colourful_errors,csv_writer,subprocess_cmd,file_finder,variables_parser,gb_parser,gff_parser,inter_gene_annotater
 from scipy.stats import binomtest
 import multiprocessing
 import matplotlib.pyplot as plt
@@ -14,8 +13,6 @@ import sys
 from numba import njit
 import pkg_resources
 import pandas as pd
-import csv
-import subprocess
 from pathlib import Path
 import matplotlib
 matplotlib.use('Agg')
@@ -37,18 +34,19 @@ def inputs(argv):
 
     global variables
     variables = Variables()
-    variables.directory = argv[0]  # folder with the unique insertions file
-    variables.strain = argv[1]  # strain name, and annotation file name
-    variables.annotation_type = argv[2]
-    variables.annotation_folder = argv[3]
-    variables.subdomain_length = [float(argv[4]), float(argv[5])] #upstream, downstream
-    variables.pvalue = float(argv[6])
-    variables.ir_size_cutoff = int(argv[7])
-    variables.output_name = variables.strain + "_alldomains"
-    variables.domain_uncertain_threshold = float(argv[8])  # 0.75
+    variables_input = variables_parser(argv)
+    variables.directory = variables_input["directory"]
+    variables.strain = variables_input["strain"]
+    variables.annotation_type = variables_input["annotation_type"]
+    variables.annotation_folder = variables_input["annotation_folder"]
+    variables.subdomain_length = [float(variables_input["subdomain_length_up"]), float(variables_input["subdomain_length_down"])]
+    variables.pvalue = float(variables_input["pvalue"])
+    variables.ir_size_cutoff = int(variables_input["intergenic_size_cutoff"])
+    variables.output_name = variables.strain + "_essential_features"
+    variables.domain_uncertain_threshold = float(variables_input["domain_uncertain_threshold"])  # 0.75
     variables.biggest_gene = 0
 
-    variables.cpus = int(argv[9])
+    variables.cpus = int(variables_input["cpus"])
 
     variables.true_positives = pkg_resources.resource_filename(
         __name__, 'data/true_positives.fasta')
@@ -60,27 +58,20 @@ def path_finder():
     correct annotation (gb/gff) based on the global variables instance. It uses the nested sub_path_finder 
     function to search for specific file types and names within specified folders. '''
 
-    def sub_path_finder(folder, extenction, search):
-        for filename in glob.glob(os.path.join(folder, extenction)):
-            test1 = filename.find(search)
-            if test1 != -1:
-                return filename
-
-    variables.insertion_file_path = sub_path_finder(
-        variables.directory, '*.csv', "all_insertions")
+    variables.insertion_file_path = file_finder(variables.directory, ['*.csv'], "all_insertions")
 
     if variables.annotation_type == "gb":
-        extention = '*.gb'
-        if sub_path_finder(variables.annotation_folder, extention, variables.strain) == None:
-            extention = '*.gbk'
-        variables.annotation_file_paths = [sub_path_finder(
+        extention = ['*.gb']
+        if file_finder(variables.annotation_folder, extention, variables.strain) == None:
+            extention = ['*.gbk']
+        variables.annotation_file_paths = [file_finder(
             variables.annotation_folder, extention, variables.strain)]
 
     elif variables.annotation_type == "gff":
-        variables.annotation_file_paths = [sub_path_finder(
-            variables.annotation_folder, '*.gff', variables.strain)]
-        variables.annotation_file_paths.append(sub_path_finder(
-            variables.annotation_folder, '*.fasta', variables.strain))
+        variables.annotation_file_paths = [file_finder(
+            variables.annotation_folder, ['*.gff'], variables.strain)]
+        variables.annotation_file_paths.append(file_finder(
+            variables.annotation_folder, ['*.fasta'], variables.strain))
 
         if len(variables.annotation_file_paths) < 2:
             colourful_errors("FATAL",
@@ -190,11 +181,13 @@ class Gene:
     def __init__(self, gene=None, start=None, end=None, orientation=None, domains=None, identity=None,
                  product=None, contig=None, matrix=None, domain_insertions_total=None, GC_content=None,
                  domain_notes=None, motif_seq=None, subdomain_insert_orient_plus=None,
-                 subdomain_insert_orient_neg=None, significant=None):
+                 subdomain_insert_orient_neg=None, significant=None,start_trim=None,end_trim=None):
 
         self.gene = gene
         self.start = start
         self.end = end
+        self.start_trim = start_trim
+        self.end_trim = end_trim
         self.length = end - start
         self.orientation = orientation
         self.domains = domains
@@ -209,12 +202,6 @@ class Gene:
         self.subdomain_insert_orient_plus = subdomain_insert_orient_plus or dict()
         self.subdomain_insert_orient_neg = subdomain_insert_orient_neg or dict()
         self.significant = significant or dict()
-
-def subprocess_cmd(command):
-    try:
-        return subprocess.check_output(command)
-    except subprocess.CalledProcessError as e:
-        return e.output.decode()
 
 def blast_maker():
     
@@ -254,6 +241,8 @@ def blast_maker():
                                            contig=line[1],
                                            start=start,
                                            end=end,
+                                           start_trim=start,
+                                           end_trim=end,
                                            orientation=orientation)
 
         return found_true
@@ -311,15 +300,14 @@ def domain_resizer(domain_size_multiplier, basket):
         domain_size = 1
 
     for key in basket:
-        local_stop = [basket[key].start]
-        start_iterator = basket[key].start
-        end = basket[key].end
+        local_stop = [basket[key].start_trim]
+        start_iterator = basket[key].start_trim
+        end = basket[key].end_trim
 
         divider = int((end - start_iterator) / domain_size)
 
         if divider >= 1:
             for i in range(divider):
-                # creates all the subdomains
                 local_stop.append(start_iterator+domain_size)
                 start_iterator += domain_size
 
@@ -328,7 +316,7 @@ def domain_resizer(domain_size_multiplier, basket):
 
         if local_stop[-1] != end:
             local_stop.append(end)
-        # the end of the gene is always required in duplicate
+        # the end of the gene is always required in duplicate for poorly optimized downstream functions
         local_stop.append(end)
         basket[key].domains = local_stop
     return basket
@@ -383,8 +371,8 @@ def gene_insertion_matrix(basket):
                                     borders, genome_borders_matrix, inserts, genome_insert_matrix, contig)
 
     for key in basket:
-        start = basket[key].start
-        end = basket[key].end
+        start = basket[key].start_trim
+        end = basket[key].end_trim
         for contig in variables.insertions_contig:
             # calculating local insertion transposon density in bp windows (size variable)
             if basket[key].contig == contig:
@@ -411,7 +399,7 @@ def motiv_compiler(seq, prog):
     the sequence. It returns an array containing the counts for each pattern.'''
 
     motiv_inbox = np.zeros(16)
-    for s, insertion in enumerate(seq):
+    for insertion in seq:
         if insertion != "":
             for i, motiv in enumerate(prog):
                 if [m.start() for m in re.finditer(motiv, insertion)] != []:
@@ -512,7 +500,7 @@ def essentials(chunk, variables):
         # total number of insertions in gene
         insertions = chunk[key].domain_insertions_total
         domains = chunk[key].domains[:-1]
-        start = chunk[key].start
+        start = chunk[key].start_trim
 
         if sum(insertions) == 0:  # gene has no insertions
 
@@ -679,215 +667,80 @@ def basket_storage():
     file = variables.annotation_file_paths[0]
 
     if variables.annotation_type == "gff":
-        return gene_info_parser_gff(file)
+        basket, genes = gene_info_parser_gff(file)
 
     elif variables.annotation_type == "gb":
-        return gene_info_parser_genbank(file)
+        basket, genes = gene_info_parser_genbank(file)
+    
+    if len(basket) == 0:
+        colourful_errors("FATAL",
+            "Watch out, no genomic features were loaded. The gb file is not being parsed correctly.")
+        exit()
 
+    contigs = {}
+    for contig in variables.genome_seq:
+        contigs[contig] = len(variables.genome_seq[contig])
+
+    intergenic_regions = inter_gene_annotater(genes, contigs, variables.ir_size_cutoff)
+    for ir in intergenic_regions:
+        basket[ir] = Gene(gene=ir,
+                            start=intergenic_regions[ir][0],
+                            end=intergenic_regions[ir][1],
+                            start_trim=int(intergenic_regions[ir][0]+(intergenic_regions[ir][2]*variables.subdomain_length[0])),
+                            end_trim=int(intergenic_regions[ir][0]+(intergenic_regions[ir][2]*variables.subdomain_length[1])),
+                            identity=ir,
+                            contig=intergenic_regions[ir][3])
+    return basket
+
+
+def gene_basket_maker(basket,genes,gene_info):
+
+    if gene_info["domain_size"] > variables.biggest_gene:
+        variables.biggest_gene = gene_info["domain_size"]
+
+    basket[gene_info["ID"]] = Gene(gene=gene_info["gene"], 
+                                    start=gene_info["start"], 
+                                    end=gene_info["end"], 
+                                    orientation=gene_info["orientation"],
+                                    identity=gene_info["ID"], 
+                                    product=gene_info["product"], 
+                                    contig=gene_info["contig"],
+                                    start_trim=int(gene_info["start"]+(gene_info["domain_size"]*variables.subdomain_length[0])),
+                                    end_trim=int(gene_info["start"]+(gene_info["domain_size"]*variables.subdomain_length[1])))
+
+    genes.append((gene_info["start"],gene_info["end"],gene_info["orientation"],gene_info["gene"],gene_info["contig"]))
+    return basket,genes
 
 def gene_info_parser_genbank(file):
-    ''' The gene_info_parser_genbank function takes a genbank file as input and 
-    extracts gene information, storing it in a dictionary with Gene class 
-    instances as values. It parses the file using the SeqIO module, 
-    retrieving attributes such as start, end, orientation, identity, 
-    and product for each gene.'''
 
     basket = {}
     genes = []
     for rec in SeqIO.parse(file, "gb"):
         for feature in rec.features:
-            # if feature.type == 'gene':
-            start = feature.location.start
-            end = feature.location.end
-            orientation = feature.location.strand
-            
-            current = end-start
-            if current > variables.biggest_gene:
-                variables.biggest_gene = current
-            
-            try:
-                identity = feature.qualifiers['locus_tag'][0]
-
-            except KeyError:
-                identity = None
-
-            try:
-                if 'product' in feature.qualifiers:
-                    product = feature.qualifiers['product'][0]
-                else:
-                    product = feature.qualifiers['note'][0]
-
-            except KeyError:
-                product = None
-
-            for key, val in feature.qualifiers.items():
-                if "pseudogene" in key:
-                    gene = identity
-                    break  # avoids continuing the iteration and passing to another key, which would make "gene" assume another value
-                elif "gene" in key:
-                    gene = feature.qualifiers['gene'][0]
-                    break  # avoids continuing the iteration and passing to another key, which would make "gene" assume another value
-                else:
-                    gene = identity
-
-            if identity != None:
-                basket[identity] = Gene(gene=gene, start=start, end=end, orientation=orientation,
-                                        identity=identity, product=product, contig=rec.id)
-                genes.append((start, identity, rec.id))
-
-    basket = inter_gene_annotater(basket, genes)
-
-    for gene in basket:
-
-        domain_size = basket[gene].end - basket[gene].start
-        basket[gene].start = int(
-            basket[gene].start+(domain_size*variables.subdomain_length[0]))
-        basket[gene].end = int(
-            basket[gene].start+(domain_size*variables.subdomain_length[1]))
-
-        if basket[gene].orientation == 1:
-            basket[gene].orientation = "+"
-        else:
-            basket[gene].orientation = "-"
-
-    return basket
-
-
-def inter_gene_annotater(basket, genes):
-
-    genes = list(dict.fromkeys(genes))
-    # sort by start position of the gene and contig
-    genes.sort(key=lambda x: (x[-1], x[0]))
-
-    count = 0
-    for i, gene_entry in enumerate(genes[:-1]):
-        contig = gene_entry[-1]
-        gene = gene_entry[1]
-        gene_next = genes[i+1][1]
-        if contig == genes[i+1][-1]:  # same contigs
-            gene_up_start_border = basket[gene].end + variables.ir_size_cutoff
-            gene_down_start_border = basket[gene_next].start - variables.ir_size_cutoff
-            domain_size = gene_down_start_border - gene_up_start_border
-            if domain_size >= 1:
-                count += 1
-                ident = f'IR_{count}_{basket[gene].gene}_{basket[gene].orientation}_UNTIL_{basket[gene_next].gene}_{basket[gene_next].orientation}'
-                basket[ident] = Gene(gene=ident,
-                                     start=basket[gene].start,
-                                     end=basket[gene_next].end,
-                                     identity=ident,
-                                     contig=contig)
-
-        if contig != genes[i+1][-1]:
-
-            circle_closer = basket[gene].end + variables.ir_size_cutoff
-            domain_size = len(variables.genome_seq[contig]) - circle_closer
-            if domain_size >= 1:
-                count += 1
-                ident = f'IR_{count}_{basket[gene].gene}_{basket[gene].orientation}_contig_{contig}_-end'
-                basket[ident] = Gene(gene=ident,
-                                     start=basket[gene].end,
-                                     end=len(variables.genome_seq[contig]),
-                                     identity=ident,
-                                     contig=contig)
-
-    circle_closer = basket[genes[-1][1]].end + variables.ir_size_cutoff
-    domain_size = len(variables.genome_seq[contig]) - circle_closer
-    if domain_size > 1:
-        count += 1
-        ident = f'IR_{count}_{basket[gene].gene}_{basket[gene].orientation}_contig_{contig}_-end'
-        basket[ident] = Gene(gene=ident,
-                             start=basket[genes[-1][1]].end,
-                             end=len(variables.genome_seq[contig]),
-                             identity=ident,
-                             contig=contig)
-        
-    domain_size = basket[genes[0][1]].start - variables.ir_size_cutoff
-    if domain_size > 1:
-        count += 1
-        ident = f'IR_{count}_contig_{contig}_-start_{basket[gene].gene}_{basket[genes[0][1]].orientation}'
-        basket[ident] = Gene(gene=ident,
-                             start=0,
-                             end=basket[genes[0][1]].start,
-                             identity=ident,
-                             contig=contig)
-    return basket
+            gene_info = gb_parser(feature)
+            if gene_info["ID"] != None:
+                gene_info["contig"] = rec.id
+                basket, genes = gene_basket_maker(basket,genes,gene_info)
+    return basket, genes
 
 
 def gene_info_parser_gff(file):
-    ''' The gene_info_parser_gff function takes a GFF file as input and extracts 
-    gene information, storing it in a dictionary with Gene class instances as values. 
-    It parses the file line by line, retrieving attributes such as start, end, 
-    orientation, identity, and product for each gene with a "CDS" feature.'''
 
     genes = []
     basket = {}
     with open(file) as current:
         for line in current:
-            GB = line.split('\t')  # len(GB)
-            if "#" not in GB[0][:3]:  # ignores headers
-                if GB[2] == "gene":
-                    start = int(GB[3])
-                    end = int(GB[4])
-                    
-                    lenght = end-start
-                    if lenght > variables.biggest_gene:
-                        variables.biggest_gene = lenght
-                    
-                    features = GB[8].split(";")  # gene annotation file
-                    feature = {}
-                    for entry in features:
-                        entry = entry.split("=")
-                        if len(entry) == 2:
-                            feature[entry[0]] = entry[1].replace("\n","")
-                    if "gene" in feature:
-                        gene = feature["gene"]
-                    if "Name" in feature:
-                        gene = feature["Name"]
-                    else:
-                        gene = feature["ID"]
-    
-                    contig = GB[0]
-                    orientation = GB[6]  # orientation of the gene
-    
-                    basket[feature["ID"]] = Gene(gene=gene, start=start, end=end, orientation=orientation,
-                                                 identity=feature["ID"], product=feature["product"], contig=contig)
-
-                    genes.append((start, feature["ID"], contig))
-
-            if "##FASTA" in GB[0]:
+            line = line.split('\t')
+            gene_info = gff_parser(line)
+            if gene_info is None:
                 break
-    
-    if len(basket) == 0:
-        colourful_errors("WARNING",
-            "Watch out, no genomic features were loaded. The gff file is not being parsed correctly.")
-
-    basket = inter_gene_annotater(basket, genes)
-
-    for gene in basket:
-
-        domain_size = basket[gene].end - basket[gene].start
-        basket[gene].start = int(
-            basket[gene].start+(domain_size*variables.subdomain_length[0]))
-        basket[gene].end = int(
-            basket[gene].start+(domain_size*variables.subdomain_length[1]))
-
-    return basket
+            if gene_info:
+                basket, genes = gene_basket_maker(basket,genes,gene_info)
+    return basket, genes
 
 
 def insertions_parser(startup=True):
-    ''' This function, insertions_parser, performs the following tasks:
 
-        1. Parses an insertion file to identify unique insertions and their orientation, 
-        updating related data structures.
-
-        2. Calculates the total number of insertions and the positive strand transposon 
-        insertion ratio.
-
-        3. Compiles transposon motif counts and calculates motif frequencies.
-
-        4. Prints the transposon insertion frequency for each leading strand motif.'''
-
-    # new code
     insertions_df = pd.read_csv(variables.insertion_file_path)
     insertions_df["unique"] = insertions_df["#Contig"] + \
         insertions_df["position"].astype(str)+insertions_df["Orientation"]
@@ -906,7 +759,6 @@ def insertions_parser(startup=True):
 
     variables.total_insertions = len(insertions_df)
 
-    #borders = insertions_df['Transposon Border Sequence'].tolist()
     orient_pos = len([n for n in insertions_df["Orientation"] if n == "+"])
     variables.positive_strand_tn_ratio = orient_pos / variables.total_insertions
 
@@ -953,8 +805,7 @@ def insertion_annotater(chunk, variables):
 
     for key in chunk:
 
-        chunk[key].subdomain_insert_orient_neg, chunk[key].subdomain_insert_orient_plus = {
-        }, {}  # clear past values
+        chunk[key].subdomain_insert_orient_neg, chunk[key].subdomain_insert_orient_plus = {}, {}  # clear past values
         subdomain_insertions, subdomain_insert_seq = {}, {}
 
         GC_content, domains = [], []
@@ -974,8 +825,8 @@ def insertion_annotater(chunk, variables):
         # pinning all the insertions to their gene domains
 
         for i, subdomain in enumerate(chunk[key].domains[:-2]):
-            domain_start = subdomain-chunk[key].start
-            domain_end = chunk[key].domains[i+1]-chunk[key].start
+            domain_start = subdomain-chunk[key].start_trim
+            domain_end = chunk[key].domains[i+1]-chunk[key].start_trim
             subdomain_insertions[subdomain] = sum(
                 chunk[key].gene_insert_matrix[domain_start:domain_end])
             if subdomain_insertions[subdomain] != 0:
@@ -1047,7 +898,7 @@ def multi_annotater(basket):
     pool.close()
     pool.join()
     result = [result.get() for result in result_objs]
-    # demultiplexing the results
+
     for subresult in result:
         for key in basket:
             if key in subresult:
@@ -1144,9 +995,13 @@ def multi_pvalue_iter(basket):
 
     pool = multiprocessing.Pool(processes = variables.cpus)
     for p in pvalue:
-        result = pool.apply_async(pvalue_iteration, args=((names, pvalues_list, 
-                                                           pvaluing_array, p, pvalue_listing,
-                                                           euclidean_points, variables)))
+        result = pool.apply_async(pvalue_iteration, args=((names, 
+                                                           pvalues_list, 
+                                                           pvaluing_array, 
+                                                           p, 
+                                                           pvalue_listing,
+                                                           euclidean_points, 
+                                                           variables)))
         result_objs.append(result)
 
     pool.close()
@@ -1175,8 +1030,8 @@ def final_compiler(optimal_basket, pvalue, euclidean_points):
     fdr = statsmodels.stats.multitest.multipletests(
         pvalues_list, pvalue, "fdr_bh")  # multitest correction, fdr_bh
 
-    for i, (name, entry) in enumerate(zip(names, pvaluing_array)):
-        remove_signal, pvaluing_array = pvaluing_jit(
+    for i, (_, entry) in enumerate(zip(names, pvaluing_array)):
+        _, pvaluing_array = pvaluing_jit(
             pvaluing_array, fdr[0], fdr[-1], i)
 
     fdr = fdr[3]
@@ -1233,6 +1088,8 @@ def final_compiler(optimal_basket, pvalue, euclidean_points):
     non_essentials = list(
         filter(lambda x: x[-1] == "Non-Essential", genes_list))
 
+    output_writer(variables.directory, f"{variables.output_name}_verbose", genes_list)
+
     essentials = set()
     a = [essentials.add(gene[3]) for gene in significant_genes_list_full]
 
@@ -1257,26 +1114,12 @@ def final_compiler(optimal_basket, pvalue, euclidean_points):
         for x, i in zip(variables.transposon_motiv_freq[contig], variables.di_motivs):
             dic[contig][i] = x
 
-    genes_list.insert(
-        0, ["#Transposon insertion percent bias (+strand): %s" % dic])
-    genes_list.insert(0, ["#p-value cutoff: %s" % pvalue])
-    genes_list.insert(0, ["#fdr corrected p-value cutoff: %s" % fdr])
-    genes_list.insert(
-        0, ["#Number of genes with at least one domain that is non-essential: %s" % len(non_essentials_list)])
-    genes_list.insert(
-        0, ["#Number of whole genes that are non-essential: %s" % full_non_e_genes])
-    genes_list.insert(
-        0, ["#Number of genes with at least one domain too small for assaying: %s" % len(non_assayed_list)])
-    genes_list.insert(
-        0, ["#Number of whole genes too small for assaying: %s" % full_na_genes])
-    genes_list.insert(
-        0, ["#Number of genes with at least one domain that is essential: %s" % len(essentials)])
-    genes_list.insert(
-        0, ["#Number of whole genes that are essential: %s" % len(significant_genes_list)])
+    stats_file = f"""\n    ####  \ESSENTIALITY INFO\n    ####  \n\nTransposon insertion percent bias (+strand): {dic}\np-value cutoff: {pvalue}\nfdr corrected p-value cutoff: {fdr}\nNumber of features with at least one domain that is non-essential: {len(non_essentials_list)}\nNumber of whole features that are non-essential: {full_non_e_genes}\nNumber of features with at least one domain too small for assaying: {len(non_assayed_list)}\nNumber of whole features too small for assaying: {full_na_genes}\nNumber of features with at least one domain that is essential: {len(essentials)}\nNumber of whole features that are essential: {len(significant_genes_list)}\n"""
+    text_out = variables.directory + "Essentiality_stats.log"
+    with open(text_out, "w+") as text_file:
+        text_file.write(stats_file)
 
-    output_writer(variables.directory, variables.output_name, genes_list)
     x, y = zip(*euclidean_points[0])
-
     fig, ax1 = plt.subplots()
     plt.xlim(0, 1)
     plt.ylim(0, 1)
@@ -1290,9 +1133,9 @@ def final_compiler(optimal_basket, pvalue, euclidean_points):
     ax1.legend([legenda], loc="lower right")
     fig.tight_layout()
     plt.savefig(
-        f"{variables.directory}/ROC_curves{variables.strain}.png", dpi=300)
+        f"{variables.directory}/ROC_curves_{variables.strain}.png", dpi=300)
     plt.close()
-    gene_essentiality_compressor(optimal_basket,genes_list)
+    gene_essentiality_compressor(optimal_basket)
 
 
 def genome_loader(startup=True):
@@ -1452,15 +1295,14 @@ def domain_iterator(basket):
                 "ROC_curves_iterator_%s.png" % variables.strain), dpi=300)
     plt.close()
     best_index = int(sorted_optimal[0][3])
-    output_writer(variables.directory, "Best_ROC_points{}".format(
-        variables.output_name), iterator_store[best_index][4][0])
+    #output_writer(variables.directory, "Best_ROC_points{}".format(variables.output_name), iterator_store[best_index][4][0])
 
     return best_index, iterator_store[best_index][1], iterator_store[best_index][4]
 
-def gene_essentiality_compressor(basket,genes_list):
+def gene_essentiality_compressor(basket):
     
-    essentials = pd.read_csv(f"{variables.directory}/{variables.output_name}.csv",
-                             skiprows=9,low_memory=False)
+    essentials = pd.read_csv(f"{variables.directory}/{variables.output_name}_verbose.csv",
+                             low_memory=False)
 
     classifier = {'Essential': 1,
                   'Likelly Essential': 2,
@@ -1556,9 +1398,6 @@ def main(argv):
     best_basket = multi_annotater(best_basket)
     final_compiler(best_basket, pvalue, euclidean_points)
 
-
 if __name__ == "__main__":
-    if len(sys.argv) > 2:
-        argv = sys.argv[1:]
-    main(argv)
+    main(sys.argv[0])
     multiprocessing.set_start_method("spawn")

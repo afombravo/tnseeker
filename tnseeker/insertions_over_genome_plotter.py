@@ -6,45 +6,28 @@ import seaborn as sns
 from matplotlib.lines import Line2D
 import sys
 from Bio import SeqIO
+from tnseeker.extras.helper_functions import variables_parser,adjust_spines
 
 """ The script visualizes the distribution of insertions 
     in a genomic dataset. It processes the input data, processes genomic annotations, 
     and generates a plot with the distribution of insertions along the genome. 
     Here's a step-by-step breakdown of the code:
-    
-    Define the plotter function that takes the directory, annotation file, 
-    annotation type, and strain as input arguments and does the following:
-        
+                                
 """
     
 
 def main(argv):
-    directory = argv[0]
-    fasta = argv[1]
-    annotation = argv[2]
-    anno_type = argv[3]
-    barcode = argv[4] == "True"
-    strain = argv[5]
+    global variables
+    variables = variables_parser(argv)
+    variables["barcode"] = variables["barcode"] == "True"
+    plotter()
+    reads_per_gene()
 
-    plotter(directory,fasta,anno_type,strain)
-    reads_per_gene(directory,annotation,strain,anno_type,barcode)
-
-def adjust_spines(ax, spines,x,y): #offset spines
-    for loc, spine in ax.spines.items():
-        if loc in spines:
-            spine.set_position(('outward', 2.5))  # outward by 10 points
-            if (loc == 'left') or (loc == 'right'):
-                spine.set_bounds(y)
-            else:
-                spine.set_bounds(x)
-        else:
-            spine.set_color('none')  # don't draw spine
-
-def get_gene_len(anno_type,annotation):
+def get_gene_len():
     gene_l = {}
     
-    if anno_type == "gb":
-        for rec in SeqIO.parse(annotation, "gb"):
+    if variables["annotation_type"] == "gb":
+        for rec in SeqIO.parse(variables["annotation_file"], "gb"):
             for feature in rec.features:
                 if (feature.type != 'source') & (feature.type != 'misc_feature'):
                     start = feature.location.start
@@ -61,7 +44,7 @@ def get_gene_len(anno_type,annotation):
                         identity = None
                     
     else:
-        with open(annotation) as current:
+        with open(variables["annotation_file"]) as current:
             for line in current:
                 GB = line.split('\t') #len(GB)
                 
@@ -95,17 +78,17 @@ def get_gene_len(anno_type,annotation):
                     
     return gene_l
 
-def reads_per_gene(directory,annotation,strain,anno_type,barcode):
+def reads_per_gene():
 
-    gene_l = get_gene_len(anno_type,annotation)
+    gene_l = get_gene_len()
     
-    df = pd.read_csv(f"{directory}/all_insertions_{strain}.csv")
+    df = pd.read_csv(f"{variables['directory']}/all_insertions_{variables['strain']}.csv")
     dict_df = pd.DataFrame({'Gene Name': list(gene_l.keys()), 'lenght': list(gene_l.values())})
     gene_counts = df.groupby('Gene Name').size().reset_index(name='insertions')
     merged_df = pd.merge(gene_counts, dict_df, on='Gene Name', how='left')
     
-    if barcode:
-        barcodes_per_gene(dict_df,directory,strain)
+    if variables["barcode"]:
+        barcodes_per_gene(dict_df,variables["directory"],variables["strain"])
     
     merged_df["insertions/gene_len"] = merged_df['insertions'] / merged_df['lenght']
     merged_df = merged_df.dropna(subset=['insertions/gene_len'])
@@ -126,12 +109,12 @@ def reads_per_gene(directory,annotation,strain,anno_type,barcode):
     ax.spines['bottom'].set_visible(True)
     ax.spines['left'].set_visible(True)
     adjust_spines(ax, ['left', 'bottom'], (0, ax.get_xlim()[1]), (1,ax.get_ylim()[1]))
-    plt.savefig(f"{directory}/Histogram of transposon insertions per gene per length.png", dpi=300,bbox_inches='tight')
+    plt.savefig(f'{variables["directory"]}/Histogram of transposon insertions per gene per length.png', dpi=300,bbox_inches='tight')
     
     plt.show()
 
-def barcodes_per_gene(dict_df,directory,strain):
-    df = pd.read_csv(f"{directory}/annotated_barcodes_{strain}.csv")
+def barcodes_per_gene(dict_df):
+    df = pd.read_csv(f'{variables["directory"]}/annotated_barcodes_{variables["strain"]}.csv')
     gene_counts = df.groupby('Gene Name').size().reset_index(name='#Barcode')
     
     merged_df = pd.merge(gene_counts, dict_df, on='Gene Name', how='left')
@@ -154,13 +137,13 @@ def barcodes_per_gene(dict_df,directory,strain):
     ax.spines['bottom'].set_visible(True)
     ax.spines['left'].set_visible(True)
     adjust_spines(ax, ['left', 'bottom'], (0, ax.get_xlim()[1]), (1,ax.get_ylim()[1]))
-    plt.savefig(f"{directory}/Histogram of barcodes per gene per length.png", dpi=300,bbox_inches='tight')
+    plt.savefig(f'{variables["directory"]}/Histogram of barcodes per gene per length.png', dpi=300,bbox_inches='tight')
     
     plt.show()
     
-def plotter(directory,fasta,anno_type,strain):
+def plotter():
     entry=[]
-    with open(f"{directory}/all_insertions_{strain}.csv") as current:
+    with open(f'{variables["directory"]}/all_insertions_{variables["strain"]}.csv') as current:
         for line in current:
             line=line[:-1].split(",")
             if '#' not in line[0]:
@@ -182,9 +165,9 @@ def plotter(directory,fasta,anno_type,strain):
             contig_max[entry] = max(df[df['contig']==entry]['position'])
 
     genome_seq={}
-    if anno_type != 'gb':
+    if variables["annotation_type"] != 'gb':
         contig=None
-        with open(fasta) as current: #NT12004_22
+        with open(variables["genome_file"]) as current: #NT12004_22
             for line in current:
                 if '>' not in line:
                     line = line[:-1]
@@ -193,7 +176,7 @@ def plotter(directory,fasta,anno_type,strain):
                     contig = line[1:-1]
                     genome_seq[contig] = 0
     else:
-        for rec in SeqIO.parse(fasta, "gb"):
+        for rec in SeqIO.parse(variables["genome_file"], "gb"):
             genome_seq[rec.id] = len(rec.seq)
           
     cmap = matplotlib.colormaps['jet'] #gnuplot
@@ -212,7 +195,7 @@ def plotter(directory,fasta,anno_type,strain):
         if contig in df['contig'].values:
             df2 = df[df['contig']==contig]
             if i>0:
-                df2['position'] += incremental_position #sum of previous positions into the new contig as if it were concatenated
+                df2.loc[:, 'position'] += incremental_position #sum of previous positions into the new contig as if it were concatenated
             
             plt.scatter(x=df2['position'], 
                         y=df2['reads'],
@@ -282,7 +265,7 @@ def plotter(directory,fasta,anno_type,strain):
         
         plt.ylabel("Amount of reads or insertions")
         plt.xlabel("Cumulative genome position (bp)")
-        plt.title(f"{strain}")
+        plt.title(variables["strain"])
         
         max_y_value = max([max_y_value_cum_pos,max_y_value_cum_neg,
                            max_y_value_reads,
@@ -316,10 +299,8 @@ def plotter(directory,fasta,anno_type,strain):
 
     adjust_spines(ax2, ['left', 'bottom'], (0, ax2.get_xlim()[1]), (0, np.log(max_y_value)))
     
-    plt.savefig(f"{directory}/reads.png", dpi=300,bbox_inches='tight')
+    plt.savefig(f'{variables["directory"]}/reads.png', dpi=300,bbox_inches='tight')
     plt.close()
 
 if __name__ == "__main__":
-    if len(sys.argv) > 2:
-        argv = [sys.argv[1]]+[sys.argv[2]]+[sys.argv[3]]+[sys.argv[4]]+[sys.argv[5]]+[sys.argv[6]]
-    main(argv)
+    main(sys.argv[0])
