@@ -20,7 +20,7 @@ def write(listing, name, folder_path):
             for item1 in item:
                 text_file.write(item1 + "\n")
 
-def barcodeID(sequence,sequence_bin):
+def barcode_finder(sequence,sequence_bin,variables):
     border_up = border_finder(variables["borders_bin"][0],sequence_bin,variables['barcode_up_miss'])
     if border_up is not None:
         start_place = border_up+len(variables["borders_bin"][0])
@@ -53,7 +53,7 @@ def read_trimer(read_chunk):
                 read[0],read[2] = str(read[0],"utf-8"),str(read[2],"utf-8")
                 read[0] = read[0].split(" ")[0]
                 if variables["barcode"]:
-                    barcode = barcodeID(sequence,sequence_bin)
+                    barcode = barcode_finder(sequence,sequence_bin,variables)
                     if barcode is not None:
                         if (len(variables["quality_set_bar_up"].intersection(quality)) == 0) & (len(variables["quality_set_bar_down"].intersection(quality)) == 0):
                             read[0] += f":BC:{barcode}"
@@ -125,8 +125,7 @@ def extractor():
     count_trimed+=len(trimmed)
     text_out = variables['directory'] + "/trimming_log.log"
     with open(text_out, "w+") as text_file:
-        text_file.write(f"""    ####\nTN TRIMMING INFO\n    ####\n\nTotal reads trimmed: {count_trimed}\nTotal reads in file: {count_total}\nPassing reads: {round(count_trimed/count_total*100,2)}%\n
-                            ####\nBOWTIE2 INFO\n    ####\n\n""")
+        text_file.write(f"""    ####\nTN TRIMMING INFO\n    ####\n\nTotal reads trimmed: {count_trimed}\nTotal reads in file: {count_total}\nPassing reads: {round(count_trimed/count_total*100,2)}%\n\n    ####\nBOWTIE2 INFO\n    ####\n\n""")
 
 def paired_ended_rearrange():
     fastq2=file_finder(variables['sequencing_files_r'],['*.gz'])

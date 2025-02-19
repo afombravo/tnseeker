@@ -1114,8 +1114,8 @@ def final_compiler(optimal_basket, pvalue, euclidean_points):
         for x, i in zip(variables.transposon_motiv_freq[contig], variables.di_motivs):
             dic[contig][i] = x
 
-    stats_file = f"""\n    ####  \ESSENTIALITY INFO\n    ####  \n\nTransposon insertion percent bias (+strand): {dic}\np-value cutoff: {pvalue}\nfdr corrected p-value cutoff: {fdr}\nNumber of features with at least one domain that is non-essential: {len(non_essentials_list)}\nNumber of whole features that are non-essential: {full_non_e_genes}\nNumber of features with at least one domain too small for assaying: {len(non_assayed_list)}\nNumber of whole features too small for assaying: {full_na_genes}\nNumber of features with at least one domain that is essential: {len(essentials)}\nNumber of whole features that are essential: {len(significant_genes_list)}\n"""
-    text_out = variables.directory + "Essentiality_stats.log"
+    stats_file = f"""\n    ####\nESSENTIALITY INFO\n    ####\n\nTransposon insertion bias (+strand, per dinucleotide, in %):\n{dic}\np-value cutoff: {pvalue}\nfdr corrected p-value cutoff: {fdr}\nNumber of features with at least one domain that is non-essential: {len(non_essentials_list)}\nNumber of whole features that are non-essential: {full_non_e_genes}\nNumber of features with at least one domain too small for assaying: {len(non_assayed_list)}\nNumber of whole features too small for assaying: {full_na_genes}\nNumber of features with at least one domain that is essential: {len(essentials)}\nNumber of whole features that are essential: {len(significant_genes_list)}\n"""
+    text_out = variables.directory + "/Essentiality_stats.log"
     with open(text_out, "w+") as text_file:
         text_file.write(stats_file)
 

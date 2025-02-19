@@ -38,7 +38,7 @@ def plotter(insertion_count, naming, output_folder):
     average = int(np.average(reads))
     std = int(np.std(reads))
     
-    statstics = f"Read distribution for {naming}:\n  Median: {median};\n  Average: {average};\n  Std: {std}\n"
+    statstics = f"Read distribution for {naming}:\n  Median: {median}\n  Average: {average}\n  Std: {std}\n"
     
     fig, ax1 = plt.subplots()  
 
