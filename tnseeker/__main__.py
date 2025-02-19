@@ -245,7 +245,7 @@ def input_parser():
     print(f"{Fore.RED}    ██║   ██║ ╚████║ {Fore.RESET}███████║███████╗███████╗██║  ██╗███████╗██║  ██║")
     print(f"{Fore.RED}    ╚═╝   ╚═╝  ╚═══╝ {Fore.RESET}╚══════╝╚══════╝╚══════╝╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝")   
     
-    variables["version"]="1.1.0"
+    variables["version"]="1.1.0.1"
     
     print(f"{Fore.RED}            Version: {Fore.RESET}{variables['version']}")
     print("\n")  
@@ -347,6 +347,7 @@ def input_parser():
     variables["annotation_folder"]=args.ad
     variables["seq_type"]=args.st
     variables["sequence"]=args.tn
+    variables["cmd_used"] = " ".join(f"--{key}" if isinstance(value, bool) and value else f"--{key} {value}" for key, value in vars(args).items() if value is not None)
 
 def variables_initializer():
 
@@ -360,7 +361,8 @@ def variables_initializer():
     with open(variables["all_variables_path"],'w+') as current:
         for key in variables:
             current.write(str(key)+' : '+str(variables[key])+'\n')
-            print(f"{Fore.GREEN} {key}:{Fore.RESET} {variables[key]}")
+            if ("all_variables_path" not in key) & ("cmd_used" not in key):
+                print(f"{Fore.GREEN} {key}:{Fore.RESET} {variables[key]}")
     print(f"\n{Fore.YELLOW} ---- {Fore.RESET}\n")
 
 def final_report_compiler():

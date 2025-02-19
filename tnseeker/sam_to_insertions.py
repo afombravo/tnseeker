@@ -1,7 +1,6 @@
 import numpy as np
 import os
-from regex import findall
-from tnseeker.extras.helper_functions import colourful_errors,csv_writer,file_finder,variables_parser,gb_parser,gff_parser,inter_gene_annotater
+from tnseeker.extras.helper_functions import colourful_errors,csv_writer,file_finder,variables_parser,gb_parser,gff_parser,inter_gene_annotater,bowtie2parser
 from matplotlib import pyplot as plt
 from Bio import SeqIO
 import multiprocessing
@@ -96,60 +95,32 @@ def extractor():
     with open(sam_file) as current:
         for line in current:
             sam = line.split('\t')
-            if (sam[0][0] != "@") and (sam[2] != '*'): #ignores headers and unaligned contigs
-                local = sam[3]
-                sequence = sam[9] 
-                contig = sam[2]
-                flag = int(sam[1])
-                cigar = sam[5]
-                map_quality = float(sam[4])
-                border, orientation = "",""
+            sam_output = bowtie2parser(sam,variables["MAPQ"],flag_list)
+
+            if "aligned_valid_reads" in sam_output:
                 aligned_reads += 1
-                multi = "XS:i:" in sam #multiple alignemnts
-
-                if (flag in flag_list) & (multi==False) & (map_quality >= variables['MAPQ']): #only returns aligned reads witht he proper flag score
-                    
-                    aligned_valid_reads += 1
-                    
-                    if flag == flag_list[0]: #first read in pair oriented 5'to 3' (positive)
-                        orientation = "+"
-                        border = sequence[:2] 
-
-                    elif flag == flag_list[1]: #first read in pair oriented 3'to 5' (negative)
-                        orientation = "-"
-                        border = sequence[::-1][:2] #needs to be reversed to make sure the start position is always the same
-
-                        #for CIGAR
-                        matches = findall(r'(\d+)([A-Z]{1})', cigar)
-                        clipped = 0
-                        for match in matches:
-                            if match[1] == "S":
-                                clipped=int(match[0])
-                                break #only consideres the first one at the start
-
-                        local=str(int(local)+len(sequence)-clipped-1) # -1 to offsset bowtie alignement
-
-                    key = (contig, local, orientation)
-                    if key not in insertion_count: 
-                        insertion_count[key] = Insertion(contig=key[0], 
-                                                         local=key[1], 
-                                                         orientation=key[2], 
-                                                         count=1, 
-                                                         border=border,
-                                                         mapQ=map_quality)
-                    else: 
-                        insertion_count[key].count += 1
-                        insertion_count[key].mapQ += map_quality
-                    
-                    if variables['barcode']:
-                        bar = None
-                        if ":BC:" in sam[0]:
-                            bar = sam[0].split(":BC:" )[1]
-                        if bar != None:
-                            if bar in insertion_count[key].barcode:
-                                insertion_count[key].barcode[bar] += 1
-                            else:
-                                insertion_count[key].barcode[bar] = 1
+                aligned_valid_reads += 1
+                key = (sam_output["contig"], sam_output["local"], sam_output["orientation"])
+                if key not in insertion_count: 
+                    insertion_count[key] = Insertion(contig=sam_output["contig"], 
+                                                        local=sam_output["local"], 
+                                                        orientation=sam_output["orientation"], 
+                                                        count=1, 
+                                                        border=sam_output["border"],
+                                                        mapQ=sam_output["map_quality"])
+                else: 
+                    insertion_count[key].count += 1
+                    insertion_count[key].mapQ += sam_output["map_quality"]
+                
+                if variables['barcode']:
+                    bar = None
+                    if ":BC:" in sam[0]:
+                        bar = sam[0].split(":BC:" )[1]
+                    if bar != None:
+                        if bar in insertion_count[key].barcode:
+                            insertion_count[key].barcode[bar] += 1
+                        else:
+                            insertion_count[key].barcode[bar] = 1
 
     for key in insertion_count:
         insertion_count[key].mapQ = insertion_count[key].mapQ / insertion_count[key].count    

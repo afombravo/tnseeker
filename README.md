@@ -211,7 +211,7 @@ tnseeker requires several input files:
 
   --rt [RT]    Read threshold number in absolute reads number (default is 0). All insertions with <= reads will be removed.
 
-  --ne [NE]    Run without essential finding
+  --ne [NE]    Run without essential finding (outputs a .csv file with all annotated transposon insertions)
 
   --ph [PH]    Phred Score (removes reads where nucleotides have lower phred
                scores) (default is 1)
