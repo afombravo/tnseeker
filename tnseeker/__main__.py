@@ -1,10 +1,10 @@
 import os
 import subprocess
-from tnseeker import Essential_Finder,reads_trimer,sam_to_insertions,insertions_over_genome_plotter
+from tnseeker import Essential_Finder,insertions2plots,reads_trimmer,sam2insertions
 from tnseeker.extras.helper_functions import cpu,colourful_errors,subprocess_cmd,file_finder
 import argparse
 from colorama import Fore
-import pkg_resources
+import importlib.resources as resources
 
 ''' Tnseeker is a pipeline for transposon insertion sequencing (Tn-Seq) analysis. 
     It performs various operations such as read trimming, read
@@ -139,7 +139,7 @@ def tn_trimmer():
             found_trim = False
 
     if not found_trim:
-        reads_trimer.main(variables["all_variables_path"])
+        reads_trimmer.main(variables["all_variables_path"])
     else:
         colourful_errors("INFO",
             f"Found {variables['fastq_trimed']}, skipping trimming.")
@@ -147,7 +147,7 @@ def tn_trimmer():
 def sam_parser():
     
     if not os.path.isfile(f'{variables["directory"]}/all_insertions_{variables["strain"]}.csv'):
-        sam_to_insertions.main(variables["all_variables_path"])
+        sam2insertions.main(variables["all_variables_path"])
         
     else:
         colourful_errors("INFO",
@@ -174,7 +174,7 @@ def test_functionalities():
         colourful_errors("INFO",
             "Testing Tnseeker. Please hold, this might take several minutes.")
 
-        data_dir = pkg_resources.resource_filename(__name__, 'data/test/')
+        data_dir = resources.files(__name__, 'data/test/')
         result_full = subprocess.run(["python","-m", "tnseeker", 
                                         "-s","test",
                                         "-sd", data_dir,
@@ -245,7 +245,7 @@ def input_parser():
     print(f"{Fore.RED}    ██║   ██║ ╚████║ {Fore.RESET}███████║███████╗███████╗██║  ██╗███████╗██║  ██║")
     print(f"{Fore.RED}    ╚═╝   ╚═╝  ╚═══╝ {Fore.RESET}╚══════╝╚══════╝╚══════╝╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝")   
     
-    variables["version"]="1.1.0.1"
+    variables["version"]="1.1.0.2"
     
     print(f"{Fore.RED}            Version: {Fore.RESET}{variables['version']}")
     print("\n")  
@@ -311,10 +311,10 @@ def input_parser():
             variables["barcode_down_miss"] = int(args.b2m)
         
         if args.b1 is not None:
-            variables["barcode_up"] = args.b1
+            variables["barcode_up"] = str(args.b1).upper()
 
         if args.b2 is not None:
-            variables["barcode_down"] = args.b2
+            variables["barcode_down"] = str(args.b2).upper()
 
     variables["read_threshold"]=False
     variables["read_value"] = 0
@@ -424,7 +424,7 @@ def main():
         sam_parser()
         if variables["remove"]:
             os.remove(f"{variables['directory']}/alignment.sam")
-        insertions_over_genome_plotter.main(variables["all_variables_path"])
+        insertions2plots.main(variables["all_variables_path"])
     
     if variables["essential_find"]:
         colourful_errors("INFO","Infering essential genes.")

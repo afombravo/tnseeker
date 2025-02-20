@@ -11,7 +11,7 @@ import multiprocessing
 import matplotlib.pyplot as plt
 import sys
 from numba import njit
-import pkg_resources
+import importlib.resources as resources
 import pandas as pd
 from pathlib import Path
 import matplotlib
@@ -20,10 +20,11 @@ matplotlib.use('Agg')
 """
 Disclaimer: 
     I am aware this script is messy and complex. 
-    It was 5y in the making and changed a lot over time to accommodate endless 
-    features, exceptions, and use cases.
-    It´s more of a pathwork than anything else at the moment.
-    Please don´t judge me too harshly.
+    It was 6y in the making and changed a lot over time to accommodate endless 
+    features, exceptions, and use cases. 
+    I learnt Python by building this script. AND IT SHOWS!
+    It's more of a pathwork than anything else at the moment.
+    Please don't judge me too harshly.
 """
 
 def inputs(argv):
@@ -48,9 +49,9 @@ def inputs(argv):
 
     variables.cpus = int(variables_input["cpus"])
 
-    variables.true_positives = pkg_resources.resource_filename(
+    variables.true_positives = resources.files.resource_filename(
         __name__, 'data/true_positives.fasta')
-    variables.true_negatives = pkg_resources.resource_filename(
+    variables.true_negatives = resources.files.resource_filename(
         __name__, 'data/true_negatives.fasta')
 
 def path_finder():

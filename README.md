@@ -245,6 +245,6 @@ A notable exception is the poibin module, which is available in the current tnse
 
 tnseeker is composed of 2 submodules: 
 
-1. the initial sequencing processing: Handles the read trimming and alignment, creating a compiled .csv with all found transposon insertions. When individual transposon read associated barcodes are present, these are also extracted.
+1. the initial sequencing processing: Handles the read trimming and alignment, creating a compiled .csv with all found transposon insertions. When individual transposon read associated barcodes are present, these are also extracted. Running only this subpipeline can be achieved by including the `--ne` flag
 
-2. The Essential_finder: Infers gene essentiality from the insertion information found in the previous .csv file. tnseeker can thus be run on a standalone mode if the appropriate .csv and annotation files are indicated. 
+2. The Essential_finder: Infers gene essentiality from the insertion information found in the previous .csv file. tnseeker can thus be run on a standalone mode if the appropriate .csv and annotation files are indicated. Running only this subpipeline can be achieved by including the `--e` flag

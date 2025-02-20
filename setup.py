@@ -5,7 +5,7 @@ this_directory = path.abspath(path.dirname(__file__))
 with open(path.join(this_directory, 'README.md'), encoding='utf-8') as f:
     long_description = f.read()
 
-VERSION = '1.1.0.1' 
+VERSION = '1.1.0.2' 
 DESCRIPTION = 'TnSeeker'
 LONG_DESCRIPTION = 'Versatile Python3 module for processing and analyzing anything related with Tn-Seq. Requires bowtie2 to be callable from terminal. File wise, only fastq and genbank annotation files are required.'
 
@@ -20,9 +20,9 @@ setup(
         long_description=long_description,
         long_description_content_type='text/markdown',
         packages=find_packages(),
-        install_requires=["numpy == 1.26.4",
-                           "matplotlib == 3.8.2",
-                           "pandas ==  2.2.0", 
+        install_requires=["numpy",
+                           "matplotlib >= 3.8.2, < 3.10",
+                           "pandas == 2.2.0", 
                            "numba == 0.59.0",
                            "biopython == 1.83",
                            "datetime == 5.4",
@@ -34,7 +34,7 @@ setup(
                            "seaborn == 0.13.2",
                            "statsmodels == 0.14.1",
                            "colorama",
-                           "fast2q >= 2.7.4"],
+                           "fast2q >= 2.7.5"],
         
         entry_points={
         'console_scripts': [
