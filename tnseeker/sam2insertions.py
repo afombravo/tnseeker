@@ -337,7 +337,7 @@ def insertion_demultiplexer(dictionary):
         
     insertions.sort(key=lambda x: (x[0], int(x[1])))
     insertions.insert(0,["#Contig"] + ["position"] + ["Orientation"] + \
-                        ["Transposon Border Sequence"] + ["Read Counts"] + \
+                        ["Transposon chromosome Border Sequence"] + ["Read Counts"] + \
                         ["Average mapQ across reads"] + ["Gene Name"] + ["Gene Product"] + \
                         ["Gene Orientation"] + ["Relative Position in Gene (0-1)"])
     output_file_path = os.path.join(variables['directory'], f"all_insertions_{variables['strain']}.csv") #all the unique insertions

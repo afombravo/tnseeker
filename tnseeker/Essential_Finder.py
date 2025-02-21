@@ -14,6 +14,8 @@ from numba import njit
 import importlib.resources as resources
 import pandas as pd
 from pathlib import Path
+from dataclasses import dataclass, field
+from typing import Optional, Dict, List
 import matplotlib
 matplotlib.use('Agg')
 
@@ -82,58 +84,51 @@ def output_writer(output_folder, name_folder, output_file):
     output_file_path = os.path.join(output_folder, name_folder + ".csv")
     csv_writer(output_file_path,output_file)
 
-class Variables():
+@dataclass
+class Variables:
+    """ 
+    A comprehensive container for various attributes and methods related to genomic data analysis.
+    """
 
-    ''' The Variables class is a comprehensive container for various attributes 
-    and methods related to genomic data analysis. It initializes a range of attributes, 
-    such as directory paths, strain information, annotation details, contig information, 
-    genome sequence and length, and statistical parameters, among others. 
-    Users can provide custom values for these attributes, or the class will 
-    assign default values when initialized. '''
+    directory: Optional[str] = None
+    strain: Optional[str] = None
+    annotation_type: Optional[str] = None
+    annotation_folder: Optional[str] = None
+    pan_annotation: Optional[str] = None
+    output_name: Optional[str] = None
+    true_positives: Optional[int] = None
+    true_negatives: Optional[int] = None
+    insertion_file_path: Optional[str] = None
+    annotation_file_paths: Optional[List[str]] = None
+    borders_contig: Dict = field(default_factory=dict)
+    orientation_contig: Dict = field(default_factory=dict)
+    insertions_contig: Dict = field(default_factory=dict)
+    genome_seq: Dict = field(default_factory=dict)
+    genome_length: int = 0
+    annotation_contig: Optional[Dict] = None
+    total_insertions: Optional[int] = None
+    positive_strand_tn_ratio: Optional[float] = None
+    transposon_motiv_count: Dict = field(default_factory=dict)
+    transposon_motiv_freq: Dict = field(default_factory=dict)
+    chance_motif_tn: Dict = field(default_factory=dict)
+    orientation_contig_plus: Dict = field(default_factory=dict)
+    orientation_contig_neg: Dict = field(default_factory=dict)
+    subdomain_length: List[float] = field(default_factory=lambda: [0.1, 0.9])
+    pvalue: float = 0.1
+    domain_iteration:  List[int] = field(init=False, repr=False)
+    regex_compile: List[re.Pattern] = field(init=False, repr=False)
+    di_motivs: List[str] = field(init=False, repr=False)
 
-    def motif_compiler(self):
-        dna = ["A", "T", "C", "G"]
-        di_motivs = [f"{a}{b}" for a in dna for b in dna]
-        prog = [re.compile(f"(?=({m}))", re.IGNORECASE) for m in di_motivs]
-        return prog, di_motivs
-
-
-    def __init__(self, directory=None, strain=None, annotation_type=None, annotation_folder=None, pan_annotation=None,
-                 output_name=None, true_positives=None, true_negatives=None,
-                 insertion_file_path=None, annotation_file_paths=None, borders_contig={}, orientation_contig={},
-                 insertions_contig={}, genome_seq={}, genome_length=0, annotation_contig=None, total_insertions=None,
-                 positive_strand_tn_ratio=None, transposon_motiv_count=None, transposon_motiv_freq=None,
-                 chance_motif_tn=None, orientation_contig_plus=None, orientation_contig_neg=None,
-                 subdomain_length=None, pvalue=None):
-
-        self.directory = directory
-        self.strain = strain
-        self.annotation_type = annotation_type
-        self.annotation_folder = annotation_folder
-        self.pan_annotation = pan_annotation
-        self.output_name = output_name
-        self.true_positives = true_positives
-        self.true_negatives = true_negatives
-        self.domain_iteration = [1, 1.5, 2, 4, 8, 16, 32, 64, 128, 256, 512,
-                                 1024, 2048, 4096, 8192, 16384, 32768]  # """ make user defined """
-        self.subdomain_length = subdomain_length or [0.1, 0.9]
-        self.pvalue = pvalue or 0.1
-        self.insertion_file_path = insertion_file_path
-        self.annotation_file_paths = annotation_file_paths
-        self.borders_contig = borders_contig
-        self.orientation_contig = orientation_contig
-        self.insertions_contig = insertions_contig
-        self.genome_seq = genome_seq
-        self.genome_length = genome_length
-        self.annotation_contig = annotation_contig
-        self.total_insertions = total_insertions
-        self.positive_strand_tn_ratio = positive_strand_tn_ratio
-        self.transposon_motiv_count = transposon_motiv_count or dict()
-        self.transposon_motiv_freq = transposon_motiv_freq or dict()
-        self.chance_motif_tn = chance_motif_tn or dict()
-        self.orientation_contig_plus = orientation_contig_plus or dict()
-        self.orientation_contig_neg = orientation_contig_neg or dict()
+    def __post_init__(self):
         self.regex_compile, self.di_motivs = self.motif_compiler()
+        self.domain_iteration = self.fibonacci(1, 1, 50000, [])
+
+    def fibonacci(self,a,b,n,result):
+        c = a+b
+        result.append(c)
+        if c < n:
+            self.fibonacci(b,c,n,result)
+        return result
 
     def normalizer(self,contig):
         motif_genome = np.zeros(16)
@@ -142,66 +137,77 @@ class Variables():
         for i, element in enumerate(motif_genome):
             motif_genome[i] = element + atcg[i]
 
-        # probability oh having a motif with a transposon in it
+        # probability of having a motif with a transposon in it
         self.chance_motif_tn[contig] = np.divide(
             self.transposon_motiv_count[contig], motif_genome)
-        for i, entry in enumerate(self.chance_motif_tn[contig]):
-            if entry >= 1:
-                self.chance_motif_tn[contig][i] = 0.999999
+        self.chance_motif_tn[contig] = np.clip(self.chance_motif_tn[contig], 0, 0.999999)
         return np.array([[n] for n in self.chance_motif_tn[contig]])
 
+    def motif_compiler(self):
+        dna = ["A", "T", "C", "G"]
+        di_motivs = [f"{a}{b}" for a in dna for b in dna]
+        prog = [re.compile(f"(?=({m}))", re.IGNORECASE) for m in di_motivs]
+        return prog, di_motivs
 
+@dataclass
 class Significant:
+    """ 
+    A container for storing information about a gene or domain.
+    
+    Attributes:
+        dom_insert (Optional[float]): Location matrix of domain insertions.
+        pvalue (Optional[float]): computed essentiality p-value.
+        dom_len (Optional[int]): Domain length.
+        ratio_orient (Optional[float]): matrix of orientation ratio.
+        orient_pvalue (Optional[float]): Orientation p-value.
+        domain_part (Optional[str]): Gene region.
+        essentiality (str): Essentiality classification (default: "Non-Essential").
+    
+    Used for the final processing of essentiality.
+    """
 
-    ''' The Significant class is a container for storing information about a 
-    gene or domain. It initializes attributes such as domain insertions, 
-    p-value, domain length, orientation ratio, orientation p-value, 
-    gene region, and essentiality. Used for the final processing of essentiality'''
+    dom_insert: Optional[float] = None
+    pvalue: Optional[float] = None
+    dom_len: Optional[int] = None
+    ratio_orient: Optional[float] = None
+    orient_pvalue: Optional[float] = None
+    domain_part: Optional[str] = None
+    essentiality: str = "Non-Essential"
 
-    def __init__(self, dom_insert=None, pvalue=None, dom_len=None, ratio_orient=None,
-                 orient_pvalue=None, domain_part=None, essentiality="Non-Essential"):
-        self.dom_insert = dom_insert
-        self.pvalue = pvalue
-        self.dom_len = dom_len
-        self.ratio_orient = ratio_orient
-        self.orient_pvalue = orient_pvalue
-        self.domain_part = domain_part
-        self.essentiality = essentiality
-
-
+@dataclass
 class Gene:
+    """ 
+    A container for storing information about a gene, including its attributes such as:
+    - Start and end positions
+    - Orientation, domains, and identity
+    - Gene product and associated contig
+    - Various data related to insertions, GC content, and domain significance
+    
+    This class is used as the first step for storing processed gene information from annotation files.
+    """
 
-    ''' The Gene class is a container for storing information about a gene, 
-    including its attributes such as start, end, orientation, domains, identity, 
-    product, contig, and various data related to insertions, GC content, 
-    and domain significance. It initializes these attributes with provided or 
-    default values. Used as the first step for storing all processed gene information 
-    from the annotation files'''
+    gene: Optional[str] = None
+    start: Optional[int] = None
+    end: Optional[int] = None
+    start_trim: Optional[int] = None
+    end_trim: Optional[int] = None
+    orientation: Optional[str] = None
+    domains: Optional[str] = None
+    identity: Optional[str] = None
+    product: Optional[str] = None
+    contig: Optional[str] = None
+    gene_insert_matrix: Optional[str] = None  # Assuming matrix is stored as a string or another type
+    domain_insertions_total: Optional[int] = None
+    GC_content: Optional[float] = None
+    domain_notes: Optional[str] = None
+    motif_seq: Optional[str] = None
+    subdomain_insert_orient_plus: Dict = field(default_factory=dict)
+    subdomain_insert_orient_neg: Dict = field(default_factory=dict)
+    significant: Dict = field(default_factory=dict)
+    length: Optional[int] = field(init=False, repr=False)
 
-    def __init__(self, gene=None, start=None, end=None, orientation=None, domains=None, identity=None,
-                 product=None, contig=None, matrix=None, domain_insertions_total=None, GC_content=None,
-                 domain_notes=None, motif_seq=None, subdomain_insert_orient_plus=None,
-                 subdomain_insert_orient_neg=None, significant=None,start_trim=None,end_trim=None):
-
-        self.gene = gene
-        self.start = start
-        self.end = end
-        self.start_trim = start_trim
-        self.end_trim = end_trim
-        self.length = end - start
-        self.orientation = orientation
-        self.domains = domains
-        self.identity = identity
-        self.product = product
-        self.contig = contig
-        self.gene_insert_matrix = matrix
-        self.domain_insertions_total = domain_insertions_total
-        self.GC_content = GC_content
-        self.domain_notes = domain_notes
-        self.motif_seq = motif_seq
-        self.subdomain_insert_orient_plus = subdomain_insert_orient_plus or dict()
-        self.subdomain_insert_orient_neg = subdomain_insert_orient_neg or dict()
-        self.significant = significant or dict()
+    def __post_init__(self):
+        self.length = (self.end - self.start) if self.start is not None and self.end is not None else None
 
 def blast_maker():
     
@@ -316,7 +322,7 @@ def domain_resizer(domain_size_multiplier, basket):
 
         if local_stop[-1] != end:
             local_stop.append(end)
-        # the end of the gene is always required in duplicate for poorly optimized downstream functions
+        # the end of the gene is always required in duplicate due to poorly optimized downstream functions
         local_stop.append(end)
         basket[key].domains = local_stop
     return basket
@@ -347,10 +353,10 @@ def gene_insertion_matrix(basket):
 
     for contig in variables.genome_seq:
         contig_size = len(variables.genome_seq[contig])
-        genome_insert_matrix = np.zeros(contig_size, dtype=np.int8)
+        genome_insert_matrix = np.zeros(contig_size, dtype=np.int16)
         genome_borders_matrix = np.zeros(contig_size, dtype='<U2')
-        genome_orient_plus_matrix = np.zeros(contig_size, dtype=np.int8)
-        genome_orient_neg_matrix = np.zeros(contig_size, dtype=np.int8)
+        genome_orient_plus_matrix = np.zeros(contig_size, dtype=np.int16)
+        genome_orient_neg_matrix = np.zeros(contig_size, dtype=np.int16)
         variables.orientation_contig_plus[contig] = {}
         variables.orientation_contig_neg[contig] = {}
 
@@ -359,9 +365,9 @@ def gene_insertion_matrix(basket):
             borders = np.array(variables.borders_contig[contig])
             orient = np.array(variables.orientation_contig[contig])
         else:
-            inserts = np.zeros(contig_size, dtype=np.int8)
+            inserts = np.zeros(contig_size, dtype=np.int16)
             borders = np.zeros(contig_size, dtype='<U2')
-            orient = np.zeros(contig_size, dtype=np.int8)
+            orient = np.zeros(contig_size, dtype=np.int16)
 
         variables.insertions_contig[contig],\
             variables.borders_contig[contig],\
@@ -382,10 +388,22 @@ def gene_insertion_matrix(basket):
 
 
 def count_GC(seq, prog):
-    ''' The count_GC function takes a sequence and a list of compiled regex patterns, 
-    then counts the occurrences of each pattern in the sequence. 
-    It returns a list with the counts for each pattern.'''
+    """
+    Count the occurrences of each regex pattern across a list of sequences.
 
+    Parameters
+    ----------
+    seq : list of str
+        A list of DNA/RNA or other text-based sequences to be searched.
+    prog : list of re.Pattern
+        A list of compiled regex patterns.
+
+    Returns
+    -------
+    list of int
+        A list of counts. For each pattern in `prog`, and for each string in `seq`,
+        the function appends the total number of matches found.
+    """
     result = []
     for motiv in prog:
         for insert in seq:
@@ -394,10 +412,24 @@ def count_GC(seq, prog):
 
 
 def motiv_compiler(seq, prog):
-    ''' The motiv_compiler function takes a sequence and a list of compiled 
-    regex patterns, then counts the occurrences of each non-empty pattern in 
-    the sequence. It returns an array containing the counts for each pattern.'''
+    """
+    Count how many entries in a list of sequences match each regex pattern, 
+    stopping at the first match per sequence.
 
+    Parameters
+    ----------
+    seq : list of str
+        A list of sequences to be checked.
+    prog : list of re.Pattern
+        A list of compiled regex patterns.
+
+    Returns
+    -------
+    numpy.ndarray
+        A 1D array of length 16 (by default) where each index corresponds to a pattern 
+        in `prog`. The value at each index represents how many sequences matched 
+        that pattern first. Only the first matching pattern is counted per sequence.
+    """
     motiv_inbox = np.zeros(16)
     for insertion in seq:
         if insertion != "":
@@ -409,11 +441,34 @@ def motiv_compiler(seq, prog):
 
 
 def poisson_binomial(events, motiv_inbox, tn_chance):
-    ''' The poisson_binomial function calculates the Poisson binomial 
-    cumulative distribution function for a given set of events, motif occurrences, 
-    and transposon insertion chances. It returns the absolute value of the 
-    calculated p-value.'''
+    """
+    Compute the Poisson binomial cumulative distribution function (CDF) for 
+    a set of events, motif occurrences, and transposon insertion probabilities.
 
+    Parameters
+    ----------
+    events : numpy.ndarray
+        An array indicating how many times each event occurs.
+    motiv_inbox : numpy.ndarray
+        An array counting motif occurrences (or successful matches).
+    tn_chance : numpy.ndarray
+        An array of probabilities (chances) for transposon insertion events.
+
+    Returns
+    -------
+    float
+        The absolute value of the Poisson binomial CDF evaluated at the 
+        total number of successes, where 'successes' is the sum of motif 
+        transposon insertion occurrences (capped by the sum of events).
+
+    Notes
+    -----
+    - The function defines an inner helper, `chance_matrix`, which constructs a 
+    probability array (`p_effective`) for each event occurrence.
+    - `PoiBin` is used to calculate the Poisson binomial distribution.
+    - The return value is wrapped in `abs()` to handle potential negative 
+    rounding issues in extreme cases.
+    """
     def chance_matrix(events, motiv_inbox, tn_chance):
         p_effective = np.array(())
         for i, (chance, number) in enumerate(zip(tn_chance, events)):
@@ -425,10 +480,8 @@ def poisson_binomial(events, motiv_inbox, tn_chance):
             sucess = np.sum(events)
         return sucess, p_effective
     
-
     sucess, p_effective = chance_matrix(events, motiv_inbox, tn_chance)
     pb = PoiBin(p_effective)
-
     # in some cases of highly biassed transposon, essential genes can be so significant that p < 0 (probably some bug on the poisson code)
     return abs(pb.cdf(int(sucess)))
 
@@ -765,7 +818,7 @@ def insertions_parser(startup=True):
     for (contig, insertion, orientation, border) in zip(insertions_df["#Contig"],
                                                         insertions_df["position"],
                                                         insertions_df["Orientation"],
-                                                        insertions_df["Transposon Border Sequence"]):
+                                                        insertions_df["Transposon chromosome Border Sequence"]):
 
         if variables.insertions_contig[contig] == {}:
             variables.borders_contig[contig] = [border]
@@ -779,7 +832,7 @@ def insertions_parser(startup=True):
     
     contig_df = insertions_df.groupby("#Contig")
     for (contig,contig_df) in contig_df:
-        borders = contig_df['Transposon Border Sequence'].tolist()
+        borders = contig_df['Transposon chromosome Border Sequence'].tolist()
         
         variables.transposon_motiv_count[contig] = motiv_compiler(
             borders, variables.regex_compile)
