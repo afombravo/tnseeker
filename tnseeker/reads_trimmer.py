@@ -22,6 +22,15 @@ def write(listing, name, folder_path):
 
 def read_trimer(read_chunk):
     
+    sequence_finding_vars = {'upstream':variables["borders_bin"][0],
+                            'downstream':variables["borders_bin"][1],
+                            'upstream_bin':[variables["borders_bin"][0]],
+                            'downstream_bin':[variables["borders_bin"][1]],
+                            'miss_search_up':variables['barcode_up_miss'],
+                            'miss_search_down':variables['barcode_down_miss'],
+                            'quality_set_up':set(""),
+                            'quality_set_down':set("")}
+
     processed_read = []
     for read in read_chunk:
         sequence = str(read[1],"utf-8").upper()
@@ -37,14 +46,7 @@ def read_trimer(read_chunk):
                 if variables["barcode"]:
                     start,end=sequence_tinder(sequence_bin,
                                                 read[3],
-                                                {'upstream':variables["borders_bin"][0],
-                                                 'downstream':variables["borders_bin"][1],
-                                                 'upstream_bin':[variables["borders_bin"][0]],
-                                                 'downstream_bin':[variables["borders_bin"][1]],
-                                                 'miss_search_up':variables['barcode_up_miss'],
-                                                 'miss_search_down':variables['barcode_down_miss'],
-                                                 'quality_set_up':set(""),
-                                                 'quality_set_down':set("")})
+                                                sequence_finding_vars)
                     
                     if (start is not None) & (end is not None):
                         barcode = sequence[start:end]

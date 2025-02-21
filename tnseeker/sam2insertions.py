@@ -160,9 +160,6 @@ def extractor():
     result = [result.get() for result in result_objs]
     
     final_compiled_insertions = {}
-    barcoded_insertions_final = []
-    insertions_barcoded_final = []
-
     for entry in result:
         insertion,genes,contigs = entry
         final_compiled_insertions = {**final_compiled_insertions, **insertion}
@@ -181,7 +178,9 @@ def extractor():
                         final_compiled_insertions[key].relative_gene_pos = (int(final_compiled_insertions[key].local) - intergenic_regions[ir][0]) / intergenic_regions[ir][2]
 
     if variables['barcode']:
-        barcoded2insertions,insertions2barcode = insert_parser(insertion_count_filtered)
+        barcoded_insertions_final = []
+        insertions_barcoded_final = []
+        barcoded2insertions,insertions2barcode = barcode_demultiplexer(final_compiled_insertions)
 
         for barcode in barcoded2insertions:
             barcoded_insertions_final.append(barcode)
@@ -207,7 +206,7 @@ def extractor():
         output_file_path = os.path.join(variables['directory'], name)
         csv_writer(output_file_path,insertions_barcoded_final)
 
-    dictionary_parser(final_compiled_insertions)
+    insertion_demultiplexer(final_compiled_insertions)
         
     q = plotter(insertion_count, f"Unique insertions_{variables['strain']}", variables['directory'])
     reads = f"""\n    ####  \nALIGNMENT INFO\n    ####  \n\nTotal detected aligned reads: {aligned_reads}\nTotal quality passed reads: {aligned_valid_reads}\nQuality passing Vs. total aligned reads % ratio: {round(aligned_valid_reads/aligned_reads*100,2)}%\n"""
@@ -240,7 +239,7 @@ def dict_filter(dictionary,read_cut):
             del dictionary[key]
     return dictionary
 
-def insert_parser(insertion_count):    
+def barcode_demultiplexer(insertion_count):    
     insertions2barcode,barcoded2insertions = [],[]
 
     for key in insertion_count: 
@@ -321,7 +320,7 @@ def gene_parser_gff(insertion_count):
 
     return insertion_count,genes,contigs
 
-def dictionary_parser(dictionary):
+def insertion_demultiplexer(dictionary):
     
     insertions = []
     for key in dictionary:

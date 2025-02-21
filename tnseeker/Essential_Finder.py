@@ -44,15 +44,14 @@ def inputs(argv):
     variables.pvalue = float(variables_input["pvalue"])
     variables.ir_size_cutoff = int(variables_input["intergenic_size_cutoff"])
     variables.output_name = variables.strain + "_essential_features"
-    variables.domain_uncertain_threshold = float(variables_input["domain_uncertain_threshold"])  # 0.75
+    variables.domain_uncertain_threshold = float(variables_input["domain_uncertain_threshold"])
     variables.biggest_gene = 0
 
     variables.cpus = int(variables_input["cpus"])
 
-    variables.true_positives = resources.files.resource_filename(
-        __name__, 'data/true_positives.fasta')
-    variables.true_negatives = resources.files.resource_filename(
-        __name__, 'data/true_negatives.fasta')
+    variables.true_positives = resources.files('tnseeker').joinpath('data/true_positives.fasta')
+    variables.true_negatives = resources.files('tnseeker').joinpath('data/true_negatives.fasta')
+
 
 def path_finder():
     ''' The path_finder function searches for and sets file paths for both insertions file and the 

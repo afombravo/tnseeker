@@ -174,7 +174,7 @@ def test_functionalities():
         colourful_errors("INFO",
             "Testing Tnseeker. Please hold, this might take several minutes.")
 
-        data_dir = resources.files(__name__, 'data/test/')
+        data_dir = resources.files('tnseeker').joinpath('data/test/')
         result_full = subprocess.run(["python","-m", "tnseeker", 
                                         "-s","test",
                                         "-sd", data_dir,
@@ -245,7 +245,7 @@ def input_parser():
     print(f"{Fore.RED}    ██║   ██║ ╚████║ {Fore.RESET}███████║███████╗███████╗██║  ██╗███████╗██║  ██║")
     print(f"{Fore.RED}    ╚═╝   ╚═╝  ╚═══╝ {Fore.RESET}╚══════╝╚══════╝╚══════╝╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝")   
     
-    variables["version"]="1.1.0.2"
+    variables["version"]="1.1.0.6"
     
     print(f"{Fore.RED}            Version: {Fore.RESET}{variables['version']}")
     print("\n")  
