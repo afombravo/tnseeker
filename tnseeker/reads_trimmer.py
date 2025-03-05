@@ -93,7 +93,7 @@ def extractor():
         try:
             with gzip.open(file, "rb") as current:
                 for line in current:
-                    reading.append(line[:-1])
+                    reading.append(line.rstrip())
                     
                     if len(reading) == 4: 
                         read_bucket.append(reading)
