@@ -164,8 +164,8 @@ tnseeker requires several input files:
 
 ## Arguments and their meaning:
 
-Flag | Description
---- | ---
+Flag   | Description
+----- | ---
 `-h` | Show all parameters and their description.
 `-s` | Strain name. Must match the annotation/sequence (FASTA/GFF/GB) file names. TnSeeker will generate a folder with this name where all output will be stored.
 `-sd` | The full path to the sequencing files FOLDER.
