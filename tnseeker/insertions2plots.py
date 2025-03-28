@@ -6,7 +6,7 @@ import seaborn as sns
 from matplotlib.lines import Line2D
 import sys
 from Bio import SeqIO
-from tnseeker.extras.helper_functions import variables_parser,adjust_spines
+from tnseeker.extras.helper_functions import variables_parser,adjust_spines,gb_parser,gff_parser
 
 """ The script visualizes the distribution of insertions 
     in a genomic dataset. It processes the input data, processes genomic annotations, 
@@ -20,68 +20,39 @@ def main(argv):
     global variables
     variables = variables_parser(argv)
     variables["barcode"] = variables["barcode"] == "True"
-    plotter()
-    reads_per_gene()
+    gene_l,genome_seq = get_gene_len()
+    plotter(genome_seq)
+    reads_per_gene(gene_l)
 
 def get_gene_len():
-    gene_l = {}
     
+    gene_l = {}
+    genome_seq={}
     if variables["annotation_type"] == "gb":
-        for rec in SeqIO.parse(variables["annotation_file"], "gb"):
+        for rec in SeqIO.parse(variables['annotation_file'], "gb"):
+            genome_seq[rec.id] = len(rec.seq)
             for feature in rec.features:
-                if (feature.type != 'source') & (feature.type != 'misc_feature'):
-                    start = feature.location.start
-                    end = feature.location.end
-                    domain_size = end - start
-                    
-                    try:
-                        identity = feature.qualifiers['locus_tag'][0]
-                        if "gene" in feature.qualifiers:
-                            identity = feature.qualifiers['gene'][0]
-                        gene_l[identity] = domain_size
-                        
-                    except KeyError:
-                        identity = None
+                if feature.type != 'source':
+                    gene_info = gb_parser(feature)
+                    if gene_info:
+                        gene_l[gene_info["gene"]] = gene_info["end"] - gene_info["start"]
                     
     else:
         with open(variables["annotation_file"]) as current:
             for line in current:
-                GB = line.split('\t') #len(GB)
-                
-                if "##FASTA" in GB[0]:
-                    break
-                
-                if "#" not in GB[0][:3]: #ignores headers
-    
-                    start = int(GB[3])
-                    end = int(GB[4])
-                    domain_size = end - start
-                    
-                    features = GB[8].split(";") #gene annotation file
-                    feature = {}
-                    for entry in features:
-                        entry = entry.split("=")
-                        if len(entry) == 2:
-                            feature[entry[0]] = entry[1].replace("\n","")
-                    try:
-                        if "gene" in feature:
-                            gene=feature["gene"]
-                        if "Name" in feature:
-                            gene=feature["Name"]
-                        else:
-                            gene=feature["ID"]
-                    
-                    except KeyError:
-                        identity = None
-                    
-                    gene_l[gene] = domain_size
-                    
-    return gene_l
+                line = line.split('\t')
+                gene_info = gff_parser(line)
+                if gene_info:
+                    gene_l[gene_info["gene"]] = gene_info["end"] - gene_info["start"]
 
-def reads_per_gene():
+                if "sequence-region" in line[0]:
+                    line = line[0].split(" ")
+                    genome_seq[line[-3]] = int(line[-1][:-1])
 
-    gene_l = get_gene_len()
-    
+    return gene_l,genome_seq
+
+def reads_per_gene(gene_l):
+
     df = pd.read_csv(f"{variables['directory']}/all_insertions_{variables['strain']}.csv")
     dict_df = pd.DataFrame({'Gene Name': list(gene_l.keys()), 'lenght': list(gene_l.values())})
     gene_counts = df.groupby('Gene Name').size().reset_index(name='insertions')
@@ -141,7 +112,7 @@ def barcodes_per_gene(dict_df):
     
     plt.show()
     
-def plotter():
+def plotter(genome_seq):
     entry=[]
     with open(f'{variables["directory"]}/all_insertions_{variables["strain"]}.csv') as current:
         for line in current:
@@ -163,21 +134,6 @@ def plotter():
     for entry in df['contig']:
         if entry not in contig_max:
             contig_max[entry] = max(df[df['contig']==entry]['position'])
-
-    genome_seq={}
-    if variables["annotation_type"] != 'gb':
-        contig=None
-        with open(variables["genome_file"]) as current: #NT12004_22
-            for line in current:
-                if '>' not in line:
-                    line = line[:-1]
-                    genome_seq[contig] += len(line)
-                else:
-                    contig = line[1:-1]
-                    genome_seq[contig] = 0
-    else:
-        for rec in SeqIO.parse(variables["genome_file"], "gb"):
-            genome_seq[rec.id] = len(rec.seq)
           
     cmap = matplotlib.colormaps['jet'] #gnuplot
     colour = ['.9','.6']*len(genome_seq)
@@ -189,7 +145,7 @@ def plotter():
     max_y_value_cum_pos,max_y_value_cum_neg,max_y_value_reads,max_y_value_pos,max_y_value_neg = 0,0,0,0,0
     incremental_position=0
     genome_seq={k: v for k, v in sorted(genome_seq.items(), reverse=True,key=lambda item: item[1])}
-    
+
     for i,contig in enumerate(genome_seq):
 
         if contig in df['contig'].values:
@@ -273,7 +229,7 @@ def plotter():
         max_y_value *= 1.1
         
         adjust_spines(ax, ['left', 'bottom'], (0, ax.get_xlim()[1]), (1,max_y_value))
-    
+
     for i,contig in enumerate(genome_seq):
         incremental_position=0
         plt.fill_between([incremental_position,genome_seq[contig]+incremental_position],0,max_y_value,alpha=0.2,color=colour[i])

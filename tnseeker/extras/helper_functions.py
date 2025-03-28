@@ -181,8 +181,8 @@ def gb_parser(file_line):
         Dictionary with parsed genomic feature details.
     """
     output = {}
-    output["start"] = file_line.location.start
-    output["end"] = file_line.location.end
+    output["start"] = int(file_line.location.start)
+    output["end"] = int(file_line.location.end)
     output["domain_size"] = output["end"] - output["start"]
     output["orientation"] = file_line.location.strand
     
@@ -205,12 +205,9 @@ def gb_parser(file_line):
         output["product"] = None
         
     for key, val in file_line.qualifiers.items():   
-        if "pseudogene" in key:
-            output["gene"] = output["ID"]
-            break #avoids continuing the iteration and passing to another key, which would make "gene" assume another value
-        elif "gene" in key:
+        if "gene" in key:
             output["gene"] = file_line.qualifiers['gene'][0]
-            break #avoids continuing the iteration and passing to another key, which would make "gene" assume another value
+            break
         else:
             output["gene"] = output["ID"]
 
@@ -250,12 +247,17 @@ def gff_parser(file_line):
                 feature[entry[0]] = entry[1].replace("\n","")
         if "gene" in feature:
             output["gene"]=feature["gene"]
-        if "Name" in feature:
+        elif "Name" in feature:
             output["gene"]=feature["Name"]
-        else:
+        elif "ID" in feature:
             output["gene"]=feature["ID"]
+        else:
+            output["gene"]="."
 
-        output["ID"] = feature["ID"]
+        if "ID" in feature:
+            output["ID"] = feature["ID"]
+        else:
+            output["ID"] = "."
         
         output['product'] = None
         if 'product' in feature:
