@@ -171,8 +171,8 @@ Flag | Description
 `-sd` | The full path to the sequencing files FOLDER.
 `--sd_2` | The full path to the pair-ended sequencing files FOLDER (needs to be different from the first folder. In this case keep both ends in different folders).
 `-ad` | The full path to the directory with the .gb/.gbk/.gff and .fasta files. TnSeeker searches the directory for file with the name indicated in `-s`
-`-at` | Annotation Type (Genbank: `-at gb` | gff: `-at gff`)
-`-st` | Sequencing type (Paired-ended (`-st PE`) | Single-ended(`-st SE`)).
+`-at` | Annotation Type (Genbank: `-at gb` / gff: `-at gff`)
+`-st` | Sequencing type (Paired-ended (`-st PE`) / Single-ended(`-st SE`)).
 `--tst` | Runs TnSeeker in test mode to confirm everything works as expected.
 `--tn` | Transposon border sequence (e.g: `--tn GATGTGTATAAGAGACAG`). Required for triming and better/faster mapping. If this parameter is ommited no trimming will be performed and the sequences will be aligned as they are.
 `--m` | The number of allowed mismatches in transposon border sequence (default = 0). 
