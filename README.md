@@ -162,76 +162,43 @@ tnseeker requires several input files:
 ---
 
 
-## Optional Arguments and their meaning:
+## Arguments and their meaning:
 
-  -h, --help   show this help message and exit
+Flag | Description
+--- | ---
+`-h` | Show all parameters and their description.
+`-s` | Strain name. Must match the annotation/sequence (FASTA/GFF/GB) file names. TnSeeker will generate a folder with this name where all output will be stored.
+`-sd` | The full path to the sequencing files FOLDER.
+`--sd_2` | The full path to the pair-ended sequencing files FOLDER (needs to be different from the first folder. In this case keep both ends in different folders).
+`-ad` | The full path to the directory with the .gb/.gbk/.gff and .fasta files. TnSeeker searches the directory for file with the name indicated in `-s`
+`-at` | Annotation Type (Genbank: `-at gb` | gff: `-at gff`)
+`-st` | Sequencing type (Paired-ended (`-st PE`) | Single-ended(`-st SE`)).
+`--tst` | Runs TnSeeker in test mode to confirm everything works as expected.
+`--tn` | Transposon border sequence (e.g: `--tn GATGTGTATAAGAGACAG`). Required for triming and better/faster mapping. If this parameter is ommited no trimming will be performed and the sequences will be aligned as they are.
+`--m` | The number of allowed mismatches in transposon border sequence (default = 0). 
+`--k` | If passed, keeps all temporary files (default is disabled: deletes all temporary files).
+`--e` | Run only TnSeeker´s essential genes prediction workflow. Requires the "all_insertions_STRAIN.csv" file to have been generated first, and available in the output folder (you can create a folder with the name given in `-s` and place this file there).
+`--ne` | Run TnSeeker without the essential genes prediction workflow (outputs the file "all_insertions_STRAIN.csv" file with all annotated transposon insertions, alongside several other quality metrics and plots).
+`--t` | Trims to the indicated nucleotides length AFTER finding the transposon sequence. For example: 100 would mean to keep the first 100bp after the transposon (this trimmed read will be used for alignement after).
+`--b` | Run with read barcode extraction. Useful when a transposon insertion is linked to a random (or not) barcode in the same read. Enabling this option will output the linkage of all barcode sequences with their respective genome positions and gene annotations.
+`--b1` | Upstream barcode delimiting search sequence (example: `--b1 ATC`). This will return any sequence downstream of the input sequence. Needs to be ran together with `--b2` and `--b`.
+`--b2` | Downstream barcode delimiting search sequence (example: `--b2 CTA`). This will return any sequence upstream of the input sequence. Together with `--b1` and `--b` these parameters will return the associated transposon barcode.
+`--b1m` | Upstream barcode delimiting search sequence mismatches (default is 0).
+`--b2m` | Downstream barcode delimiting search sequence mismatches (default is 0).
+`--b1p` | Upstream barcode delimiting sequence minimal Phred-score (default is 1).
+`--b2p` | Downstream barcode delimiting sequence minimal Phred-score (default is 1).
+`--rt` | Read threshold number in absolute reads number (default is 0). All insertions with <= reads will be removed.
+`--ph` | Minimal Phred-score (removes reads if any nucleotide has a lower phred-score) (default is Phred-score 1).
+`--mq` | Bowtie2 minimal MAPQ threshold (removes reads with a lower MAPQ score) (default is 42).
+`--ig` | The number of bp up- and down-stream of any gene that will be ignored before a non maped DNA strech is considered an intergenic region.
+`--pv` | Starting p-value threshold for essentiality determination. p-value will be lowered iterativelly based on the optimization of the gold set essential genes. If no gold set genes are detected the value will be the default one (or other if indicated) (Default is 0.05).
+`--dut` | The correct essentiality calling of "grey-area" features that have both 'too small domains' and 'non-essential' sub-gene divisions need special case handling. When the latter two are present, if the number of 'too small domains' > ('too small domains' + 'non-essential') * dut-value (The default is 0.75), then a feature will be demeed 'too small to be assessed' in its entirity. Otherwise, 'non-essential'.
+`--sl5` | 5' gene trimming fraction to be ignored for essentiality determination. For example: `--sl5 0.1` will ignore the insertions in the FIRST 10% of any feature (number between 0 and 1).
+`--sl3` | 3' gene trimming fraction to be ignored for essentiality determination. For example: `--sl3 0.9` will ignore the insertions in the LAST 10% of any feature (number between 0 and 1).
+`--cpu` | Define the number of threads (must be an integer). Advisable when using HPC systems.
 
-  -s [S]        Strain name. Must match the annotation (FASTA/GB) file names
+Note: One - denotes mandatory arguments. Two -- indicates options.
 
-  -sd [SD]      The full path to the sequencing files FOLDER
-
-  --sd_2 [SD_2] The full path to the pair ended sequencing files FOLDER (needs
-                to be different from the first folder. In this case keep both ends in different folders.)
-
-  -ad [AD]      The full path to the directory with the .gb and .fasta files
-
-  -at [AT]      Annotation Type (Genbank: -at gb | gff: -at gff)
-
-  -st [ST]      Sequencing type (Paired-ended (PE)/Single-ended(SE))
-
-  --tst [TST]  Test mode to confirm everything works as expected.
-
-  --tn [TN]    Transposon border sequence (tn5: GATGTGTATAAGAGACAG). Required for triming and better/faster mapping.
-
-  --m [M]      Mismatches in the transposon border sequence (default is 0)
-
-  --k [K]      Remove intermediate files. Default is yes, remove.
-
-  --e [E]      Run only the essential determing script. Requires the
-               all_insertions_STRAIN.csv file to have been generated first.
-
-  --t [T]      Trims to the indicated nucleotides length AFTER finding the
-               transposon sequence. For example, 100 would mean to keep the first
-               100bp after the transposon (this trimmed read will be used for
-               alignement after)
-
-  --b [B]      Run with barcode extraction.
-
-  --b1 [B1]    upstream barcode search sequence (example: ATC)
-
-  --b2 [B2]    downstream barcode search sequence (example: CTA)
-
-  --b1m [B1M]  upstream barcode search sequence mismatches (default is 0)
-
-  --b2m [B2M]  downstream barcode search sequence mismatches (default is 0)
-
-  --b1p [B1P]  upstream barcode sequence Phred-score filtering. (default is 1)
-
-  --b2p [B2P]  downstream barcode sequence Phred-score filtering. (default is 1)
-
-  --rt [RT]    Read threshold number in absolute reads number (default is 0). All insertions with <= reads will be removed.
-
-  --ne [NE]    Run without essential finding (outputs a .csv file with all annotated transposon insertions)
-
-  --ph [PH]    Phred Score (removes reads where nucleotides have lower phred
-               scores) (default is 1)
-
-  --mq [MQ]    Bowtie2 MAPQ threshold (default is 42)
-
-  --ig [IG]    The number of bp up and down stream of any gene that will be ignored before a non maped DNA strech is considered an intergenic region.
-
-  --pv [PV]    Starting pvalue threshold for essentiality determination. Default is 0.05. p-value will be lowered iterativelly based on the optimization of the gold set essential genes. If no genes are present. The value will be the default one (or other if indicated)
-
-  --dut [DUT]  The correct essentiality calling of features that have both 'too small domains' and 'non-essential' sub-gene divisions needs a special case. 
-               When the latter two are present, if 'too small domains' > ('too small domains' + 'non-essential') * dut-value (The default is 0.75), then a feature will be demeed 'too small domains' in its entirity. Otherwise, 'non-essential'.
-
-  --sl5 [SL5]  5' gene trimming percent to be ignored for essentiality determination (number
-               between 0 and 1)
-
-  --sl3 [SL3]  3' gene trimming percent to be ignored for essentiality determination (number
-               between 0 and 1)
-
-  --cpu [CPU]  Define the number of threads (must be an integer). Advisable when using HPC systems.
 
 ---
 ## Python Dependencies
