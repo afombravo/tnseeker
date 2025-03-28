@@ -230,7 +230,7 @@ def input_parser():
     parser.add_argument("--dut",nargs='?',const=0.75,default=0.75, help="fraction of the minimal amount of 'too small domains' in a gene before the entire gene is deemed uncertain for essentiality inference")
     parser.add_argument("--pv",nargs='?',const=0.05,default=0.05,help="Essential Finder pvalue threshold for essentiality determination")
     parser.add_argument("--sl5",nargs='?',const=0,default=0,help="5' gene trimming percent for essentiality determination (number between 0 and 1)")
-    parser.add_argument("--sl3",nargs='?',const=0,default=0,help="3' gene trimming percent for essentiality determination (number between 0 and 1)")
+    parser.add_argument("--sl3",nargs='?',const=1,default=1,help="3' gene trimming percent for essentiality determination (number between 0 and 1)")
     parser.add_argument("--tst",nargs='?',const=True,help="Test the program functionalities and instalations")
     parser.add_argument("--cpu",nargs='?',const=None,help="Define the number of threads (must be and integer)")
 
@@ -245,7 +245,7 @@ def input_parser():
     print(f"{Fore.RED}    ██║   ██║ ╚████║ {Fore.RESET}███████║███████╗███████╗██║  ██╗███████╗██║  ██║")
     print(f"{Fore.RED}    ╚═╝   ╚═╝  ╚═══╝ {Fore.RESET}╚══════╝╚══════╝╚══════╝╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝")   
     
-    variables["version"]="1.1.0.8"
+    variables["version"]="1.1.0.9"
     
     print(f"{Fore.RED}            Version: {Fore.RESET}{variables['version']}")
     print("\n")  

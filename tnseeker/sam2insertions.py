@@ -96,9 +96,11 @@ def extractor():
         for line in current:
             sam = line.split('\t')
             sam_output = bowtie2parser(sam,variables["MAPQ"],flag_list)
+            
+            if "aligned_reads" in sam_output:
+                aligned_reads += 1
 
             if "aligned_valid_reads" in sam_output:
-                aligned_reads += 1
                 aligned_valid_reads += 1
                 key = (sam_output["contig"], sam_output["local"], sam_output["orientation"])
                 if key not in insertion_count: 
@@ -141,6 +143,11 @@ def extractor():
 
     colourful_errors("INFO","Annotating insertions.")
 
+    annotations_dict,contigs = annotation_ETL()
+
+    if not annotations_dict:
+        colourful_errors("WARNING","Watch out, no genomic features were found. The annotation file is not being parsed correctly, or was not loaded - check paths.")
+
     result_objs = []
     pool = multiprocessing.Pool(processes = variables['cpus'])
     for batch in batch_goals:
@@ -151,7 +158,7 @@ def extractor():
                 insertion_count_filtered[key] = insertion_count[key]
 
         result=pool.apply_async(annotation_processer, 
-                            args=(insertion_count_filtered,))
+                            args=(annotations_dict,insertion_count_filtered))
     
         result_objs.append(result)
     pool.close()
@@ -160,20 +167,16 @@ def extractor():
     result = [result.get() for result in result_objs]
     
     final_compiled_insertions = {}
-    for entry in result:
-        insertion,genes,contigs = entry
+    for insertion in result:
         final_compiled_insertions = {**final_compiled_insertions, **insertion}
 
-    if len(genes) == 0:
-        colourful_errors("WARNING","Watch out, no genomic features were loaded. The annotation file is not being parsed correctly, or was not loaded.")
-
-    intergenic_regions = inter_gene_annotater(genes, contigs, variables['intergenic_size_cutoff'])
+    intergenic_regions = inter_gene_annotater(annotations_dict, contigs, variables['intergenic_size_cutoff'])
 
     for ir in intergenic_regions:
         for key in final_compiled_insertions:
             if final_compiled_insertions[key].name is None:
                 if final_compiled_insertions[key].contig == intergenic_regions[ir][3]:
-                    if (int(final_compiled_insertions[key].local) >= intergenic_regions[ir][0]) & (int(final_compiled_insertions[key].local) <= intergenic_regions[ir][1]):
+                    if intergenic_regions[ir][0] <= int(final_compiled_insertions[key].local) <= intergenic_regions[ir][1]:
                         final_compiled_insertions[key].name = ir
                         final_compiled_insertions[key].relative_gene_pos = (int(final_compiled_insertions[key].local) - intergenic_regions[ir][0]) / intergenic_regions[ir][2]
 
@@ -193,6 +196,7 @@ def extractor():
                                             ["Contig"] + ["position"] + ["Orientation"] + ["Total Reads in position"] + \
                                             ["Average MapQ"] + ["Gene Name"] + ["Gene Product"] + ["Gene Orientation"] + \
                                             ["Relative Position in Gene (0-1)"])
+        
         name = f"annotated_barcodes_{variables['strain']}.csv"
         output_file_path = os.path.join(variables['directory'], name)
         csv_writer(output_file_path,barcoded_insertions_final)
@@ -222,16 +226,21 @@ def extractor():
     with open("{}/library_stats_{}.log".format(variables['directory'],variables['strain']), "w+") as current:
         current.write(reads+q+total_insertions_count)
 
-def annotation_processer(insertion_count_filtered):
+def annotation_processer(annotations_dict, insertion_count_filtered):
 
     if variables['read_threshold']:
-        insertion_count_filtered=dict_filter(insertion_count_filtered,variables['read_value'],variables['barcode'])
-    
+        insertion_count_filtered=dict_filter(insertion_count_filtered,
+                                             variables['read_value'])
+
+    return insertion_annotator(annotations_dict, insertion_count_filtered)
+
+def annotation_ETL():
+
     if (variables['annotation_file'].endswith(".gb")) or (variables['annotation_file'].endswith(".gbk")):
-        return gene_parser_genbank(insertion_count_filtered)
+        return gene_parser_genbank()
         
     elif variables['annotation_file'].endswith(".gff"):
-        return gene_parser_gff(insertion_count_filtered)
+        return gene_parser_gff()
 
 def dict_filter(dictionary,read_cut):
     for key in list(dictionary):
@@ -274,51 +283,68 @@ def barcode_demultiplexer(insertion_count):
 
     return barcoded2insertions,insertions2barcode
 
-def insertion_annotator(genes,contig,gene_info,insertion_count):
-    genes.append((gene_info["start"],gene_info["end"],gene_info["orientation"],gene_info["gene"],contig))
+def insertion_annotator(annotations_dict, insertion_count):
 
-    for key in insertion_count:
-        if insertion_count[key].contig == contig:
-            if (int(insertion_count[key].local) >= gene_info["start"]) & (int(insertion_count[key].local) <= gene_info["end"]):
-                insertion_count[key].name = gene_info["gene"]
-                insertion_count[key].product = gene_info["product"]
-                insertion_count[key].gene_orient = gene_info["orientation"]
-                insertion_count[key].relative_gene_pos = (int(insertion_count[key].local) - gene_info["start"]) / gene_info["domain_size"]
-                if gene_info["orientation"] == "-":
-                    insertion_count[key].relative_gene_pos = 1 - insertion_count[key].relative_gene_pos
-    return genes,insertion_count
+    for gene_info in annotations_dict.values():
+        start, end, orientation = gene_info["start"], gene_info["end"], gene_info["orientation"]
 
-def gene_parser_genbank(insertion_count):
+        for insertion in insertion_count.values():
+            if insertion.contig == gene_info["contig"]:
+                local_pos = int(insertion.local)
+                if start <= local_pos <= end:
+                    insertion.name = gene_info["gene"]
+                    insertion.product = gene_info["product"]
+                    insertion.gene_orient = orientation
+
+                    relative_pos = (local_pos - start) / gene_info["domain_size"]
+                    insertion.relative_gene_pos = 1 - relative_pos if orientation == "-" else relative_pos
+
+    return insertion_count
+
+def gene_parser_genbank():
 
     contigs = {}
-    genes = []
+    genes = {}
     for rec in SeqIO.parse(variables['annotation_file'], "gb"):
         for feature in rec.features:
             if feature.type != 'source':
                 gene_info = gb_parser(feature)
-                genes,insertion_count = insertion_annotator(genes,rec.id,gene_info,insertion_count)
+
+                if gene_info:
+                    gene_info["contig"] = rec.id
+                    gene_key = ((gene_info["start"], gene_info["end"], gene_info["orientation"], gene_info["gene"], rec.id))
+                    genes[gene_key] = gene_info
 
         contigs[rec.id] = len(rec.seq)
-    return insertion_count,genes,contigs
 
-def gene_parser_gff(insertion_count):
+    if not contigs:
+        colourful_errors("FATAL","No headers with contig names and sizes were found in the genbank file. Please check the file.")
+        exit()
+
+    return genes,contigs
+
+def gene_parser_gff():
     
     contigs = {}
-    genes = []
+    genes = {}
     with open(variables['annotation_file']) as current:
         for line in current:
             line = line.split('\t')
             gene_info = gff_parser(line)
-            if gene_info is None:
-                break
+
             if gene_info:
-                genes,insertion_count = insertion_annotator(genes,gene_info["contig"],gene_info,insertion_count)
+                gene_key = ((gene_info["start"], gene_info["end"], gene_info["orientation"], gene_info["gene"], gene_info["contig"]))
+                genes[gene_key] = gene_info
 
             if "sequence-region" in line[0]:
                 line = line[0].split(" ")
                 contigs[line[-3]] = int(line[-1][:-1])
 
-    return insertion_count,genes,contigs
+    if not contigs:
+        colourful_errors("FATAL","No headers with contig names and sizes were found in the GFF file. Please check the headers of the example gff file at github for reference.")
+        exit()
+    
+    return genes,contigs
 
 def insertion_demultiplexer(dictionary):
     
@@ -334,14 +360,29 @@ def insertion_demultiplexer(dictionary):
                           [dictionary[key].product] + \
                           [dictionary[key].gene_orient] + \
                           [dictionary[key].relative_gene_pos])
-        
+
     insertions.sort(key=lambda x: (x[0], int(x[1])))
+
+    bigwig_plus,bigwig_minus = "",""
+    for key in insertions:
+        if key[2] == "+":
+            bigwig_plus += f"{key[0]}\t{key[1]}\t{int(key[1])+1}\t{key[4]}\n"
+        else:
+            bigwig_minus += f"{key[0]}\t{key[1]}\t{int(key[1])+1}\t{key[4]}\n"
+
     insertions.insert(0,["#Contig"] + ["position"] + ["Orientation"] + \
                         ["Transposon chromosome Border Sequence"] + ["Read Counts"] + \
                         ["Average mapQ across reads"] + ["Gene Name"] + ["Gene Product"] + \
                         ["Gene Orientation"] + ["Relative Position in Gene (0-1)"])
+    
     output_file_path = os.path.join(variables['directory'], f"all_insertions_{variables['strain']}.csv") #all the unique insertions
     csv_writer(output_file_path,insertions)
+
+    #write the Bigwig file
+    with open(os.path.join(variables['directory'], f"all_insertions_{variables['strain']}_bigwig_plus.bw"), "w+") as current:
+        current.write(bigwig_plus)
+    with open(os.path.join(variables['directory'], f"all_insertions_{variables['strain']}_bigwig_minus.bw"), "w+") as current:
+        current.write(bigwig_minus)
 
 if __name__ == "__main__":
     main(sys.argv[0])

@@ -1,5 +1,6 @@
 import statsmodels.stats.multitest
 from Bio import SeqIO
+from Bio.Seq import Seq
 import os
 import numpy as np
 import scipy
@@ -64,10 +65,15 @@ def path_finder():
 
     if variables.annotation_type == "gb":
         extention = ['*.gb']
-        if file_finder(variables.annotation_folder, extention, variables.strain) == None:
+        if file_finder(variables.annotation_folder, extention, variables.strain) == []:
             extention = ['*.gbk']
         variables.annotation_file_paths = [file_finder(
             variables.annotation_folder, extention, variables.strain)]
+        
+        if len(variables.annotation_file_paths) < 1:
+            colourful_errors("FATAL",
+                 "Check there is a genbank file in the indicated folder.")
+            exit()
 
     elif variables.annotation_type == "gff":
         variables.annotation_file_paths = [file_finder(
@@ -78,7 +84,7 @@ def path_finder():
         if len(variables.annotation_file_paths) < 2:
             colourful_errors("FATAL",
                  "Check there is a .fasta and .gff file in the indicated folder.")
-            raise Exception
+            exit()
 
 def output_writer(output_folder, name_folder, output_file):
     output_file_path = os.path.join(output_folder, name_folder + ".csv")
@@ -113,7 +119,7 @@ class Variables:
     chance_motif_tn: Dict = field(default_factory=dict)
     orientation_contig_plus: Dict = field(default_factory=dict)
     orientation_contig_neg: Dict = field(default_factory=dict)
-    subdomain_length: List[float] = field(default_factory=lambda: [0.1, 0.9])
+    subdomain_length: List[float] = field(default_factory=lambda: [0, 1])
     pvalue: float = 0.1
     domain_iteration:  List[int] = field(init=False, repr=False)
     regex_compile: List[re.Pattern] = field(init=False, repr=False)
@@ -334,8 +340,12 @@ def gene_insertion_matrix(basket):
     borders, and orientations of transposons. It updates the basket with the 
     calculated gene insertion matrix for each gene.'''
 
-    def contig_matrix_generator(orient, genome_orient_plus_matrix, genome_orient_neg_matrix,
-                                borders, genome_borders_matrix, inserts, genome_insert_matrix, contig):
+    def contig_matrix_generator(orient, borders, inserts, contig, contig_size):
+        
+        genome_insert_matrix = np.zeros(contig_size, dtype=np.int16)
+        genome_borders_matrix = np.zeros(contig_size, dtype='<U2')
+        genome_orient_plus_matrix = np.zeros(contig_size, dtype=np.int16)
+        genome_orient_neg_matrix = np.zeros(contig_size, dtype=np.int16)
 
         for j, local in enumerate(inserts):
             local = int(local-1)
@@ -346,17 +356,15 @@ def gene_insertion_matrix(basket):
             else:
                 genome_orient_neg_matrix[local] = 1
 
-        return genome_insert_matrix, genome_borders_matrix, genome_orient_plus_matrix, genome_orient_neg_matrix
+        variables.orientation_contig_neg[contig] = genome_orient_neg_matrix
+        variables.orientation_contig_plus[contig] = genome_orient_plus_matrix
+        variables.borders_contig[contig] = genome_borders_matrix
+        variables.insertions_contig[contig] = genome_insert_matrix
 
-    colourful_errors("INFO",
-        "Compiling insertion matrix.")
+    colourful_errors("INFO","Gnerating the insertion matrix.")
 
     for contig in variables.genome_seq:
         contig_size = len(variables.genome_seq[contig])
-        genome_insert_matrix = np.zeros(contig_size, dtype=np.int16)
-        genome_borders_matrix = np.zeros(contig_size, dtype='<U2')
-        genome_orient_plus_matrix = np.zeros(contig_size, dtype=np.int16)
-        genome_orient_neg_matrix = np.zeros(contig_size, dtype=np.int16)
         variables.orientation_contig_plus[contig] = {}
         variables.orientation_contig_neg[contig] = {}
 
@@ -369,19 +377,12 @@ def gene_insertion_matrix(basket):
             borders = np.zeros(contig_size, dtype='<U2')
             orient = np.zeros(contig_size, dtype=np.int16)
 
-        variables.insertions_contig[contig],\
-            variables.borders_contig[contig],\
-            variables.orientation_contig_plus[contig],\
-            variables.orientation_contig_neg[contig] = \
-            contig_matrix_generator(orient, genome_orient_plus_matrix, genome_orient_neg_matrix,
-                                    borders, genome_borders_matrix, inserts, genome_insert_matrix, contig)
+        contig_matrix_generator(orient, borders, inserts, contig, contig_size)
 
-    for key in basket:
-        start = basket[key].start_trim
-        end = basket[key].end_trim
-        for contig in variables.insertions_contig:
-            # calculating local insertion transposon density in bp windows (size variable)
+        for key in basket:
             if basket[key].contig == contig:
+                start = basket[key].start_trim
+                end = basket[key].end_trim
                 basket[key].gene_insert_matrix = variables.insertions_contig[contig][start-1:end-1]
 
     return basket
@@ -776,7 +777,6 @@ def gene_info_parser_genbank(file):
                 basket, genes = gene_basket_maker(basket,genes,gene_info)
     return basket, genes
 
-
 def gene_info_parser_gff(file):
 
     genes = []
@@ -785,12 +785,9 @@ def gene_info_parser_gff(file):
         for line in current:
             line = line.split('\t')
             gene_info = gff_parser(line)
-            if gene_info is None:
-                break
             if gene_info:
                 basket, genes = gene_basket_maker(basket,genes,gene_info)
     return basket, genes
-
 
 def insertions_parser(startup=True):
 
@@ -798,6 +795,7 @@ def insertions_parser(startup=True):
     insertions_df["unique"] = insertions_df["#Contig"] + \
         insertions_df["position"].astype(str)+insertions_df["Orientation"]
     insertions_df.drop_duplicates(subset=['unique'], inplace=True)
+
     if startup:
         colourful_errors("INFO",
             f"Total Insertions in library: {len(insertions_df)}")
@@ -810,40 +808,29 @@ def insertions_parser(startup=True):
     insertions_df = insertions_df[insertions_df["Relative Position in Gene (0-1)"].astype(
         float) >= variables.subdomain_length[0]]
 
-    variables.total_insertions = len(insertions_df)
+    variables.total_insertions = len(insertions_df) #all insertions
 
     orient_pos = len([n for n in insertions_df["Orientation"] if n == "+"])
     variables.positive_strand_tn_ratio = orient_pos / variables.total_insertions
 
-    for (contig, insertion, orientation, border) in zip(insertions_df["#Contig"],
-                                                        insertions_df["position"],
-                                                        insertions_df["Orientation"],
-                                                        insertions_df["Transposon chromosome Border Sequence"]):
-
-        if variables.insertions_contig[contig] == {}:
-            variables.borders_contig[contig] = [border]
-            variables.orientation_contig[contig] = [orientation]
-            variables.insertions_contig[contig] = [int(insertion)]
-
-        else:
-            variables.borders_contig[contig].append(border)
-            variables.orientation_contig[contig].append(orientation)
-            variables.insertions_contig[contig].append(int(insertion))
+    # complement the - sequences to have the biases on the + strand, the only one used to compute essentiality
+    insertions_df.loc[insertions_df['Orientation'] == '-', 'Transposon chromosome Border Sequence'] = \
+    insertions_df.loc[insertions_df['Orientation'] == '-', 'Transposon chromosome Border Sequence'].apply(lambda seq: str(Seq(seq).complement()))
     
     contig_df = insertions_df.groupby("#Contig")
     for (contig,contig_df) in contig_df:
-        borders = contig_df['Transposon chromosome Border Sequence'].tolist()
-        
-        variables.transposon_motiv_count[contig] = motiv_compiler(
-            borders, variables.regex_compile)
+        variables.borders_contig[contig] = np.array(contig_df['Transposon chromosome Border Sequence'].tolist())
+        variables.orientation_contig[contig] = np.array(contig_df["Orientation"].tolist())
+        variables.insertions_contig[contig] = np.array(contig_df["position"].tolist(), dtype=int)
+
+        variables.transposon_motiv_count[contig] = motiv_compiler(variables.borders_contig[contig], 
+                                                                  variables.regex_compile)
         total = sum(variables.transposon_motiv_count[contig]) #total number of insertions in contig
 
-        variables.transposon_motiv_freq[contig] = np.zeros(
-            len(variables.transposon_motiv_count[contig]))
+        variables.transposon_motiv_freq[contig] = np.zeros(len(variables.transposon_motiv_count[contig]))
         for i, element in enumerate(variables.transposon_motiv_count[contig]):
             if element != 0:
-                variables.transposon_motiv_freq[contig][i] = round(
-                    element / total * 100, 1)
+                variables.transposon_motiv_freq[contig][i] = round(element / total * 100, 1)
     
         # calculating the insertion frequency
         variables.chance_motif_tn[contig] = variables.normalizer(contig)
@@ -1165,7 +1152,7 @@ def final_compiler(optimal_basket, pvalue, euclidean_points):
     for contig in variables.transposon_motiv_freq:
         dic[contig] = {}
         for x, i in zip(variables.transposon_motiv_freq[contig], variables.di_motivs):
-            dic[contig][i] = x
+            dic[contig][i] = round(float(x),1)
 
     stats_file = f"""\n    ####\nESSENTIALITY INFO\n    ####\n\nTransposon insertion bias (+strand, per dinucleotide, in %):\n{dic}\np-value cutoff: {pvalue}\nfdr corrected p-value cutoff: {fdr}\nNumber of features with at least one domain that is non-essential: {len(non_essentials_list)}\nNumber of whole features that are non-essential: {full_non_e_genes}\nNumber of features with at least one domain too small for assaying: {len(non_assayed_list)}\nNumber of whole features too small for assaying: {full_na_genes}\nNumber of features with at least one domain that is essential: {len(essentials)}\nNumber of whole features that are essential: {len(significant_genes_list)}\n"""
     text_out = variables.directory + "/Essentiality_stats.log"
