@@ -189,7 +189,7 @@ Flag   | Description
 `--b2p` | Downstream barcode delimiting sequence minimal Phred-score (default is 1).
 `--rt` | Read threshold number in absolute reads number (default is 0). All insertions with <= reads will be removed.
 `--ph` | Minimal Phred-score (removes reads if any nucleotide has a lower phred-score) (default is Phred-score 1).
-`--mq` | Bowtie2 minimal MAPQ threshold (removes reads with a lower MAPQ score) (default is 42).
+`--mq` | Bowtie2 minimal MAPQ threshold (removes reads with a lower MAPQ score) (default is 1).
 `--ig` | The number of bp up- and down-stream of any gene that will be ignored before a non maped DNA strech is considered an intergenic region.
 `--pv` | Starting p-value threshold for essentiality determination. p-value will be lowered iterativelly based on the optimization of the gold set essential genes. If no gold set genes are detected the value will be the default one (or other if indicated) (Default is 0.05).
 `--dut` | The correct essentiality calling of "grey-area" features that have both 'too small domains' and 'non-essential' sub-gene divisions need special case handling. When the latter two are present, if the number of 'too small domains' > ('too small domains' + 'non-essential') * dut-value (The default is 0.75), then a feature will be demeed 'too small to be assessed' in its entirity. Otherwise, 'non-essential'.
