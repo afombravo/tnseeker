@@ -363,12 +363,12 @@ def insertion_demultiplexer(dictionary):
 
     insertions.sort(key=lambda x: (x[0], int(x[1])))
 
-    bigwig_plus,bigwig_minus = "",""
+    bedgraph_plus,bedgraph_minus = "",""
     for key in insertions:
         if key[2] == "+":
-            bigwig_plus += f"{key[0]}\t{key[1]}\t{int(key[1])+1}\t{key[4]}\n"
+            bedgraph_plus += f"{key[0]}\t{key[1]}\t{int(key[1])+1}\t{key[4]}\n"
         else:
-            bigwig_minus += f"{key[0]}\t{key[1]}\t{int(key[1])+1}\t{key[4]}\n"
+            bedgraph_minus += f"{key[0]}\t{key[1]}\t{int(key[1])+1}\t{key[4]}\n"
 
     insertions.insert(0,["#Contig"] + ["position"] + ["Orientation"] + \
                         ["Transposon chromosome Border Sequence"] + ["Read Counts"] + \
@@ -378,11 +378,11 @@ def insertion_demultiplexer(dictionary):
     output_file_path = os.path.join(variables['directory'], f"all_insertions_{variables['strain']}.csv") #all the unique insertions
     csv_writer(output_file_path,insertions)
 
-    #write the Bigwig file
-    with open(os.path.join(variables['directory'], f"all_insertions_{variables['strain']}_bigwig_plus.bw"), "w+") as current:
-        current.write(bigwig_plus)
-    with open(os.path.join(variables['directory'], f"all_insertions_{variables['strain']}_bigwig_minus.bw"), "w+") as current:
-        current.write(bigwig_minus)
+    #write the bedgraph file
+    with open(os.path.join(variables['directory'], f"all_insertions_{variables['strain']}_bedgraph_plus.bedgraph"), "w+") as current:
+        current.write(bedgraph_plus)
+    with open(os.path.join(variables['directory'], f"all_insertions_{variables['strain']}_bedgraph_minus.bedgraph"), "w+") as current:
+        current.write(bedgraph_minus)
 
 if __name__ == "__main__":
     main(sys.argv[0])

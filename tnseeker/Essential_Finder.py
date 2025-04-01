@@ -361,7 +361,7 @@ def gene_insertion_matrix(basket):
         variables.borders_contig[contig] = genome_borders_matrix
         variables.insertions_contig[contig] = genome_insert_matrix
 
-    colourful_errors("INFO","Gnerating the insertion matrix.")
+    colourful_errors("INFO","Generating the insertion matrix.")
 
     for contig in variables.genome_seq:
         contig_size = len(variables.genome_seq[contig])
@@ -1071,24 +1071,21 @@ def final_compiler(optimal_basket, pvalue, euclidean_points):
         pvalues_list, pvalue, "fdr_bh")  # multitest correction, fdr_bh
 
     for i, (_, entry) in enumerate(zip(names, pvaluing_array)):
-        _, pvaluing_array = pvaluing_jit(
-            pvaluing_array, fdr[0], fdr[-1], i)
+        _, pvaluing_array = pvaluing_jit(pvaluing_array, fdr[0], fdr[-1], i)
 
     fdr = fdr[3]
     legenda = f"Threshold p-value: {pvalue}"
     essentiality = []
+    bedgraph_plus,bedgraph_minus = "",""
 
-    for i, entry in enumerate(pvaluing_array):
-        if entry[3] == 0:
-            essentiality.append("too small for assaying")
-        if entry[3] == 1:
-            essentiality.append("Non-Essential")
-        if entry[3] == 2:
-            essentiality.append("Probably Essential")
-        if entry[3] == 3:
-            essentiality.append("Likelly Essential")
-        if entry[3] == 4:
-            essentiality.append("Essential")
+    essentiality_translator = {0:"too small for assaying",
+                               1:"Non-Essential",
+                               2:"Probably Essential",
+                               3:"Likelly Essential",
+                               4:"Essential"}
+
+    for entry in pvaluing_array:
+        essentiality.append(essentiality_translator[entry[3]])
 
     genes_list = [["Total unique Tn insertions"] + ["Essentiality p-value"] +
                   ["Contig"] + ["Gene ID"] + ["Description"] + ["Domain length"] +
@@ -1097,38 +1094,40 @@ def final_compiler(optimal_basket, pvalue, euclidean_points):
 
     i = 0
     for gene in optimal_basket:
-        for domain in optimal_basket[gene].significant:
-            genes_list.append([optimal_basket[gene].significant[domain].dom_insert] +
-                              [str(optimal_basket[gene].significant[domain].pvalue).replace("'","")] +
-                              [optimal_basket[gene].contig] +
-                              [optimal_basket[gene].identity] +
-                              [optimal_basket[gene].product] +
-                              [int(optimal_basket[gene].significant[domain].dom_len)] +
-                              [optimal_basket[gene].significant[domain].ratio_orient] +
-                              [optimal_basket[gene].significant[domain].orient_pvalue] +
-                              [optimal_basket[gene].significant[domain].domain_part] +
-                              [optimal_basket[gene].orientation] +
-                              [optimal_basket[gene].gene] +
+        current = optimal_basket[gene]
+        for domain in current.significant:
+
+            if current.orientation == "+":
+                bedgraph_plus += f"{current.contig}\t{current.start}\t{current.end}\t{pvaluing_array[i][3]}\n"
+            else:
+                bedgraph_minus += f"{current.contig}\t{current.start}\t{current.end}\t{pvaluing_array[i][3]}\n"
+
+            genes_list.append([current.significant[domain].dom_insert] +
+                              [str(current.significant[domain].pvalue).replace("'","")] +
+                              [current.contig] +
+                              [current.identity] +
+                              [current.product] +
+                              [int(current.significant[domain].dom_len)] +
+                              [current.significant[domain].ratio_orient] +
+                              [current.significant[domain].orient_pvalue] +
+                              [current.significant[domain].domain_part] +
+                              [current.orientation] +
+                              [current.gene] +
                               [essentiality[i]])
             i += 1
 
-    # there is some issue with the couting
-    significant_genes_list = list(
-        filter(lambda x: x[-1] == "Essential", genes_list))  # gets just the essentials
-    significant_genes_list_full = significant_genes_list + \
-        list(filter(lambda x: x[-1] == "Likelly Essential",
-             genes_list))  # gets just the essentials
-    significant_genes_list_full = significant_genes_list_full + \
-        list(filter(lambda x: x[-1] == "Possibly Essential",
-             genes_list))  # gets just the essentials
-    # gets just the non evaluated genes
-    non_assayed = list(
-        filter(lambda x: x[-1] == "too small for assaying", genes_list))
-    # gets just the non essentials
-    non_essentials = list(
-        filter(lambda x: x[-1] == "Non-Essential", genes_list))
+    significant_genes_list = list(filter(lambda x: x[-1] == "Essential", genes_list))  
+    significant_genes_list_full = significant_genes_list + list(filter(lambda x: x[-1] == "Likelly Essential",genes_list)) + list(filter(lambda x: x[-1] == "Possibly Essential", genes_list))
+    non_assayed = list(filter(lambda x: x[-1] == "too small for assaying", genes_list))
+    non_essentials = list(filter(lambda x: x[-1] == "Non-Essential", genes_list))
 
     output_writer(variables.directory, f"{variables.output_name}_verbose", genes_list)
+    
+    #write the bedgraph file
+    with open(os.path.join(variables.directory, f"{variables.output_name}_bedgraph_plus.bedgraph"), "w+") as current:
+        current.write(bedgraph_plus)
+    with open(os.path.join(variables.directory, f"{variables.output_name}_bedgraph_minus.bedgraph"), "w+") as current:
+        current.write(bedgraph_minus)
 
     essentials = set()
     a = [essentials.add(gene[3]) for gene in significant_genes_list_full]
