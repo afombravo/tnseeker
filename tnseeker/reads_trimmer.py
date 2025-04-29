@@ -74,7 +74,12 @@ def extractor():
     divider = 250000
     count_total=0
     count_trimed=0
-    quality_list = '!"#$%&' + "'()*+,-/0123456789:;<=>?@ABCDEFGHI" #Phred score
+    
+    quality_list = ""
+    base = 33 # if the phred-score base is different, place the right base value here
+    for q in range(94): # all the Sanger format quality ranges by order from lowest to highest
+        quality_list += chr(q+base) #Phred score in order of probabilities
+
     if variables["phred"] < 1:
         variables["phred"] = 1
     variables["quality_set"] = set(quality_list[:variables["phred"]-1])

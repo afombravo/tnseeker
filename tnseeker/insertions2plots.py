@@ -10,9 +10,7 @@ from tnseeker.extras.helper_functions import variables_parser,adjust_spines,gb_p
 
 """ The script visualizes the distribution of insertions 
     in a genomic dataset. It processes the input data, processes genomic annotations, 
-    and generates a plot with the distribution of insertions along the genome. 
-    Here's a step-by-step breakdown of the code:
-                                
+    and generates a plot with the distribution of insertions along the genome.                        
 """
     
 
@@ -35,7 +33,8 @@ def get_gene_len():
                 if feature.type != 'source':
                     gene_info = gb_parser(feature)
                     if gene_info:
-                        gene_l[gene_info["gene"]] = gene_info["end"] - gene_info["start"]
+                        if gene_info['gene'] not in gene_l:
+                            gene_l[gene_info["gene"]] = gene_info["end"] - gene_info["start"]
                     
     else:
         with open(variables["annotation_file"]) as current:
@@ -79,6 +78,7 @@ def reads_per_gene(gene_l):
     ax.spines['right'].set_visible(False)
     ax.spines['bottom'].set_visible(True)
     ax.spines['left'].set_visible(True)
+    #ax.set_xlim(0, 1)
     adjust_spines(ax, ['left', 'bottom'], (0, ax.get_xlim()[1]), (1,ax.get_ylim()[1]))
     plt.savefig(f'{variables["directory"]}/Histogram of transposon insertions per gene per length.png', dpi=300,bbox_inches='tight')
     
@@ -148,7 +148,7 @@ def plotter(genome_seq):
 
     for i,contig in enumerate(genome_seq):
 
-        if contig in df['contig'].values:
+        if contig in set(df['contig']):
             df2 = df[df['contig']==contig]
             if i>0:
                 df2.loc[:, 'position'] += incremental_position #sum of previous positions into the new contig as if it were concatenated
@@ -255,7 +255,7 @@ def plotter(genome_seq):
 
     adjust_spines(ax2, ['left', 'bottom'], (0, ax2.get_xlim()[1]), (0, np.log(max_y_value)))
     
-    plt.savefig(f'{variables["directory"]}/reads.png', dpi=300,bbox_inches='tight')
+    plt.savefig(f'{variables["directory"]}/reads_insertion_genome_distribution.png', dpi=300,bbox_inches='tight')
     plt.close()
 
 if __name__ == "__main__":

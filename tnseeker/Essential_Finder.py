@@ -26,7 +26,7 @@ Disclaimer:
     It was 6y in the making and changed a lot over time to accommodate endless 
     features, exceptions, and use cases. 
     I learnt Python by building this script. AND IT SHOWS!
-    It's more of a pathwork than anything else at the moment.
+    It's more of a patchwork than anything else at the moment.
     Please don't judge me too harshly.
 """
 
@@ -107,7 +107,6 @@ class Variables:
     insertion_file_path: Optional[str] = None
     annotation_file_paths: Optional[List[str]] = None
     borders_contig: Dict = field(default_factory=dict)
-    orientation_contig: Dict = field(default_factory=dict)
     insertions_contig: Dict = field(default_factory=dict)
     genome_seq: Dict = field(default_factory=dict)
     genome_length: int = 0
@@ -115,19 +114,21 @@ class Variables:
     total_insertions: Optional[int] = None
     positive_strand_tn_ratio: Optional[float] = None
     transposon_motiv_count: Dict = field(default_factory=dict)
-    transposon_motiv_freq: Dict = field(default_factory=dict)
     chance_motif_tn: Dict = field(default_factory=dict)
     orientation_contig_plus: Dict = field(default_factory=dict)
     orientation_contig_neg: Dict = field(default_factory=dict)
     subdomain_length: List[float] = field(default_factory=lambda: [0, 1])
     pvalue: float = 0.1
-    domain_iteration:  List[int] = field(init=False, repr=False)
+    domain_iteration: List[int] = field(init=False, repr=False)
     regex_compile: List[re.Pattern] = field(init=False, repr=False)
     di_motivs: List[str] = field(init=False, repr=False)
-
+    best_genome_size: Optional[int] = None
+    best_domain_size: Optional[int] = None
+    bin_size: int = 10000
+    
     def __post_init__(self):
         self.regex_compile, self.di_motivs = self.motif_compiler()
-        self.domain_iteration = self.fibonacci(1, 1, 50000, [])
+        self.domain_iteration = self.fibonacci(1, 1, 50000, [])[1:]
 
     def fibonacci(self,a,b,n,result):
         c = a+b
@@ -136,18 +137,16 @@ class Variables:
             self.fibonacci(b,c,n,result)
         return result
 
-    def normalizer(self,contig):
-        motif_genome = np.zeros(16)
+    def motiv_2array_counter(self,contig, star_coord, end_coord):
         # Counts the entire motifv content of the genome; determining the probability of having an insertion in each motif
-        atcg = count_GC([self.genome_seq[contig]], self.regex_compile)
-        for i, element in enumerate(motif_genome):
-            motif_genome[i] = element + atcg[i]
-
+        return np.array(count_GC([self.genome_seq[contig][star_coord:end_coord]], self.regex_compile))
+    
+    def normalizer(self,contig, star_coord, end_coord):
+        motif_genome = self.motiv_2array_counter(contig, star_coord, end_coord) 
         # probability of having a motif with a transposon in it
-        self.chance_motif_tn[contig] = np.divide(
-            self.transposon_motiv_count[contig], motif_genome)
-        self.chance_motif_tn[contig] = np.clip(self.chance_motif_tn[contig], 0, 0.999999)
-        return np.array([[n] for n in self.chance_motif_tn[contig]])
+        self.chance_motif_tn[contig][star_coord] = np.divide(self.transposon_motiv_count[contig][star_coord], motif_genome)
+        self.chance_motif_tn[contig][star_coord] = np.clip(self.chance_motif_tn[contig][star_coord], 0, 0.999999)
+        self.chance_motif_tn[contig][star_coord] = np.array([[n] for n in self.chance_motif_tn[contig][star_coord]])
 
     def motif_compiler(self):
         dna = ["A", "T", "C", "G"]
@@ -202,11 +201,12 @@ class Gene:
     identity: Optional[str] = None
     product: Optional[str] = None
     contig: Optional[str] = None
-    gene_insert_matrix: Optional[str] = None  # Assuming matrix is stored as a string or another type
+    gene_insert_matrix: Optional[str] = None  
     domain_insertions_total: Optional[int] = None
     GC_content: Optional[float] = None
     domain_notes: Optional[str] = None
     motif_seq: Optional[str] = None
+    genome_normalization_range: Optional[str] = None
     subdomain_insert_orient_plus: Dict = field(default_factory=dict)
     subdomain_insert_orient_neg: Dict = field(default_factory=dict)
     significant: Dict = field(default_factory=dict)
@@ -299,14 +299,11 @@ def blast_maker():
     
     return compiled_benchmark
 
-def domain_resizer(domain_size_multiplier, basket):
+def domain_resizer(domain_size, basket):
     ''' The domain_resizer function takes a domain size multiplier and a dictionary 
     of genes (basket) as input, and resizes gene domains by calculating the new 
     domain size based on genome length, total insertions, and domain size multiplier. 
     It then updates the domain boundaries for each gene in the basket.'''
-
-    domain_size = int(variables.genome_length /
-                      variables.total_insertions * domain_size_multiplier)
     
     if domain_size == 0:
         domain_size = 1
@@ -335,56 +332,15 @@ def domain_resizer(domain_size_multiplier, basket):
 
 
 def gene_insertion_matrix(basket):
-    ''' The gene_insertion_matrix function generates gene insertion matrices for 
-    each gene in the given basket by considering genome sequence, insertions, 
-    borders, and orientations of transposons. It updates the basket with the 
+    ''' The gene_insertion_matrix updates the basket with the 
     calculated gene insertion matrix for each gene.'''
 
-    def contig_matrix_generator(orient, borders, inserts, contig, contig_size):
-        
-        genome_insert_matrix = np.zeros(contig_size, dtype=np.int16)
-        genome_borders_matrix = np.zeros(contig_size, dtype='<U2')
-        genome_orient_plus_matrix = np.zeros(contig_size, dtype=np.int16)
-        genome_orient_neg_matrix = np.zeros(contig_size, dtype=np.int16)
-
-        for j, local in enumerate(inserts):
-            local = int(local-1)
-            genome_insert_matrix[local] = 1
-            genome_borders_matrix[local] = borders[j]
-            if orient[j] == "+":
-                genome_orient_plus_matrix[local] = 1
-            else:
-                genome_orient_neg_matrix[local] = 1
-
-        variables.orientation_contig_neg[contig] = genome_orient_neg_matrix
-        variables.orientation_contig_plus[contig] = genome_orient_plus_matrix
-        variables.borders_contig[contig] = genome_borders_matrix
-        variables.insertions_contig[contig] = genome_insert_matrix
-
-    colourful_errors("INFO","Generating the insertion matrix.")
-
     for contig in variables.genome_seq:
-        contig_size = len(variables.genome_seq[contig])
-        variables.orientation_contig_plus[contig] = {}
-        variables.orientation_contig_neg[contig] = {}
-
-        if len(variables.insertions_contig[contig]) != 0:
-            inserts = np.array(variables.insertions_contig[contig], dtype=int)
-            borders = np.array(variables.borders_contig[contig])
-            orient = np.array(variables.orientation_contig[contig])
-        else:
-            inserts = np.zeros(contig_size, dtype=np.int16)
-            borders = np.zeros(contig_size, dtype='<U2')
-            orient = np.zeros(contig_size, dtype=np.int16)
-
-        contig_matrix_generator(orient, borders, inserts, contig, contig_size)
-
         for key in basket:
             if basket[key].contig == contig:
                 start = basket[key].start_trim
                 end = basket[key].end_trim
                 basket[key].gene_insert_matrix = variables.insertions_contig[contig][start-1:end-1]
-
     return basket
 
 
@@ -436,7 +392,7 @@ def motiv_compiler(seq, prog):
         if insertion != "":
             for i, motiv in enumerate(prog):
                 if [m.start() for m in re.finditer(motiv, insertion)] != []:
-                    motiv_inbox[i] = motiv_inbox[i] + 1
+                    motiv_inbox[i] += 1
                     break
     return motiv_inbox
 
@@ -521,7 +477,7 @@ def essentials(chunk, variables):
             subdomain_insert_orient_neg_cluster
         if total_orientation != 0:
             ratio_orientation = subdomain_insert_orient_pos_cluster / \
-                total_orientation  # zero means no neg insertions, only positive
+                total_orientation  # zero means no pos insertions, only negative
             pvalue = binomtest(subdomain_insert_orient_pos_cluster,
                                total_orientation, p, alternative='two-sided').pvalue
         else:
@@ -540,7 +496,7 @@ def essentials(chunk, variables):
         chunk[key].significant[domain].domain_part = domain
         try:
             chunk[key].significant[domain].pvalue = poisson_binomial(
-                domain_motivs, motiv_insertions, variables.chance_motif_tn[chunk[key].contig])  # / (1/sum(domain_motivs))
+                domain_motivs, motiv_insertions, chunk[key].genome_normalization_range)  # / (1/sum(domain_motivs))
         except Exception as e:
             colourful_errors("WARNING",
                 f"Due to {e}, {key} could not be evaluated.")
@@ -653,7 +609,7 @@ def pvaluing_jit(pvaluing_array, pvalue_bol, sig_thresh, i):
     if pvalue_bol[i]:  # only appends pvalues that are significant
         if pvaluing_array[i][1] == 1:
             essentiality_score = 4  # essential
-        elif pvaluing_array[i][2] >= gene_half_size:
+        elif pvaluing_array[i][2] >= gene_half_size: #if essential domain lenght is bigger than half
             essentiality_score = 3  # likely essential
         else:
             essentiality_score = 2  # possibly essential
@@ -687,8 +643,7 @@ def pvaluing(names, pvalues_list, pvaluing_array, pvalue, variables, baseline_es
         pvalues_list, pvalue, "fdr_bh")  # multitest correction, fdr_bh
 
     for i, (name, entry) in enumerate(zip(names, pvaluing_array)):
-        remove_signal, pvaluing_array = pvaluing_jit(
-            pvaluing_array, fdr[0], fdr[-1], i)
+        remove_signal, pvaluing_array = pvaluing_jit(pvaluing_array, fdr[0], fdr[-1], i)
 
         if remove_signal == 1:
             if (name in baseline_essentials) & (len(baseline_essentials) >= 30):
@@ -789,15 +744,14 @@ def gene_info_parser_gff(file):
                 basket, genes = gene_basket_maker(basket,genes,gene_info)
     return basket, genes
 
-def insertions_parser(startup=True):
+def insertions_parser():
 
     insertions_df = pd.read_csv(variables.insertion_file_path)
     insertions_df["unique"] = insertions_df["#Contig"] + \
         insertions_df["position"].astype(str)+insertions_df["Orientation"]
     insertions_df.drop_duplicates(subset=['unique'], inplace=True)
 
-    if startup:
-        colourful_errors("INFO",
+    colourful_errors("INFO",
             f"Total Insertions in library: {len(insertions_df)}")
 
     insertions_df.drop(
@@ -817,23 +771,30 @@ def insertions_parser(startup=True):
     insertions_df.loc[insertions_df['Orientation'] == '-', 'Transposon chromosome Border Sequence'] = \
     insertions_df.loc[insertions_df['Orientation'] == '-', 'Transposon chromosome Border Sequence'].apply(lambda seq: str(Seq(seq).complement()))
     
-    contig_df = insertions_df.groupby("#Contig")
-    for (contig,contig_df) in contig_df:
-        variables.borders_contig[contig] = np.array(contig_df['Transposon chromosome Border Sequence'].tolist())
-        variables.orientation_contig[contig] = np.array(contig_df["Orientation"].tolist())
-        variables.insertions_contig[contig] = np.array(contig_df["position"].tolist(), dtype=int)
-
-        variables.transposon_motiv_count[contig] = motiv_compiler(variables.borders_contig[contig], 
-                                                                  variables.regex_compile)
-        total = sum(variables.transposon_motiv_count[contig]) #total number of insertions in contig
-
-        variables.transposon_motiv_freq[contig] = np.zeros(len(variables.transposon_motiv_count[contig]))
-        for i, element in enumerate(variables.transposon_motiv_count[contig]):
-            if element != 0:
-                variables.transposon_motiv_freq[contig][i] = round(element / total * 100, 1)
+    contig_df_grouped = insertions_df.groupby("#Contig")
+    colourful_errors("INFO","Generating the insertion matrix.")
     
-        # calculating the insertion frequency
-        variables.chance_motif_tn[contig] = variables.normalizer(contig)
+    for (contig,contig_df) in contig_df_grouped:
+        contig_df['position_bin'] = (contig_df['position'] // variables.bin_size) * variables.bin_size #normalization bin size
+
+        insert_map_matrix = np.array(contig_df["position"].tolist(), dtype=int) - 1
+        
+        variables.insertions_contig[contig][insert_map_matrix] = 1
+        
+        variables.borders_contig[contig][insert_map_matrix] = np.array(contig_df['Transposon chromosome Border Sequence'].tolist())
+        
+        orient = np.array(contig_df['Orientation'].tolist())
+        plus_mask = orient == "+"
+        variables.orientation_contig_plus[contig][insert_map_matrix[plus_mask]] = 1
+        neg_mask = orient == "-"
+        variables.orientation_contig_neg[contig][insert_map_matrix[neg_mask]] = 1
+        
+        # pre compute genome insertion probabilities
+        bin_grouped = contig_df.groupby('position_bin')
+        for (bin_number,binned_position_df) in bin_grouped:
+            borders = np.array(binned_position_df['Transposon chromosome Border Sequence'].tolist())
+            variables.transposon_motiv_count[contig][bin_number] = motiv_compiler(borders, variables.regex_compile)
+            variables.normalizer(contig,bin_number,bin_number+variables.bin_size)
     
 def insertion_annotater(chunk, variables):
     ''' The function insertion_annotater takes a dictionary chunk of gene 
@@ -1028,7 +989,9 @@ def multi_pvalue_iter(basket):
     resulting lists of p-value thresholds and corresponding true/false positive rates.  '''
 
     # change here to increase resolution of iteration
-    pvalue = [variables.pvalue * 0.5 ** i for i in range(200)]
+    #pvalue = [variables.pvalue * 0.5 ** i for i in range(200)]
+    
+    pvalue = [variables.pvalue * 0.25 ** i for i in range(50)]
     result_objs, pvalue_listing, euclidean_points = [], [], []
 
     pvaluing_array, names, pvalues_list = class_to_numba(basket)
@@ -1055,14 +1018,13 @@ def multi_pvalue_iter(basket):
     return pvalue_listing, [n for n in zip(*euclidean_points)]
 
 
-def final_compiler(optimal_basket, pvalue, euclidean_points):
+def final_compiler(optimal_basket, pvalue):
     ''' The final_compiler function takes a dictionary of genes and their 
     properties and performs essentiality calling and statistical analysis 
     using p-value thresholding. The function converts the gene dictionary into 
     Numpy arrays and applies the pvaluing function to determine essentiality. 
     The function then compiles a table of gene properties and essentiality 
-    information, and generates an ROC (Receiver Operating Characteristic) 
-    curve plot for the data. Finally, the function saves the table and plot 
+    information. Finally, the function saves the table and plot 
     to files in a specified directory. '''
 
     pvaluing_array, names, pvalues_list = class_to_numba(optimal_basket)
@@ -1074,18 +1036,16 @@ def final_compiler(optimal_basket, pvalue, euclidean_points):
         _, pvaluing_array = pvaluing_jit(pvaluing_array, fdr[0], fdr[-1], i)
 
     fdr = fdr[3]
-    legenda = f"Threshold p-value: {pvalue}"
-    essentiality = []
     bedgraph_plus,bedgraph_minus = "",""
+    non_essentials_list,non_assayed_list,essentials,significant_genes_list = set(),set(),set(),set()
 
-    essentiality_translator = {0:"too small for assaying",
+    essentiality_translator = {0:"Inconclusive",
                                1:"Non-Essential",
                                2:"Probably Essential",
-                               3:"Likelly Essential",
+                               3:"Likely Essential",
                                4:"Essential"}
 
-    for entry in pvaluing_array:
-        essentiality.append(essentiality_translator[entry[3]])
+    essentiality = [essentiality_translator[entry[3]] for entry in pvaluing_array]
 
     genes_list = [["Total unique Tn insertions"] + ["Essentiality p-value"] +
                   ["Contig"] + ["Gene ID"] + ["Description"] + ["Domain length"] +
@@ -1114,12 +1074,18 @@ def final_compiler(optimal_basket, pvalue, euclidean_points):
                               [current.orientation] +
                               [current.gene] +
                               [essentiality[i]])
-            i += 1
+            
+            if essentiality[i] == "Non-Essential":
+                non_essentials_list.add(current.identity)
+            elif essentiality[i] == "Inconclusive":
+                non_assayed_list.add(current.identity)
+            elif essentiality[i] == "Essential":
+                significant_genes_list.add(current.identity)
+                essentials.add(current.identity)
+            else:
+                essentials.add(current.identity)
 
-    significant_genes_list = list(filter(lambda x: x[-1] == "Essential", genes_list))  
-    significant_genes_list_full = significant_genes_list + list(filter(lambda x: x[-1] == "Likelly Essential",genes_list)) + list(filter(lambda x: x[-1] == "Possibly Essential", genes_list))
-    non_assayed = list(filter(lambda x: x[-1] == "too small for assaying", genes_list))
-    non_essentials = list(filter(lambda x: x[-1] == "Non-Essential", genes_list))
+            i += 1
 
     output_writer(variables.directory, f"{variables.output_name}_verbose", genes_list)
     
@@ -1129,17 +1095,6 @@ def final_compiler(optimal_basket, pvalue, euclidean_points):
     with open(os.path.join(variables.directory, f"{variables.output_name}_bedgraph_minus.bedgraph"), "w+") as current:
         current.write(bedgraph_minus)
 
-    essentials = set()
-    a = [essentials.add(gene[3]) for gene in significant_genes_list_full]
-
-    non_assayed_list = set()
-    a = [non_assayed_list.add(gene[3])
-         for gene in non_assayed if gene[-2] not in non_assayed_list]
-
-    non_essentials_list = set()
-    a = [non_essentials_list.add(
-        gene[3]) for gene in non_essentials if gene[-2] not in non_essentials_list]
-
     intersect = non_assayed_list.intersection(essentials)
     intersect |= non_assayed_list.intersection(non_essentials_list)
     full_na_genes = len(non_assayed_list) - len(intersect)
@@ -1147,37 +1102,15 @@ def final_compiler(optimal_basket, pvalue, euclidean_points):
     intersect |= non_essentials_list.intersection(non_assayed_list)
     full_non_e_genes = len(non_essentials_list) - len(intersect)
 
-    dic = {}
-    for contig in variables.transposon_motiv_freq:
-        dic[contig] = {}
-        for x, i in zip(variables.transposon_motiv_freq[contig], variables.di_motivs):
-            dic[contig][i] = round(float(x),1)
-
-    stats_file = f"""\n    ####\nESSENTIALITY INFO\n    ####\n\nTransposon insertion bias (+strand, per dinucleotide, in %):\n{dic}\np-value cutoff: {pvalue}\nfdr corrected p-value cutoff: {fdr}\nNumber of features with at least one domain that is non-essential: {len(non_essentials_list)}\nNumber of whole features that are non-essential: {full_non_e_genes}\nNumber of features with at least one domain too small for assaying: {len(non_assayed_list)}\nNumber of whole features too small for assaying: {full_na_genes}\nNumber of features with at least one domain that is essential: {len(essentials)}\nNumber of whole features that are essential: {len(significant_genes_list)}\n"""
+    stats_file = f"""\n    ####\nESSENTIALITY INFO\n    ####\n\nOptimal feature sub-division:{variables.best_domain_size}bp\nOptimal genome normalization sub-division:{variables.best_genome_size}bp\np-value cutoff: {pvalue}\nfdr corrected p-value cutoff: {fdr}\nNumber of features with at least one domain that is non-essential: {len(non_essentials_list)}\nNumber of whole features that are non-essential: {full_non_e_genes}\nNumber of features with at least one inconclusive domain: {len(non_assayed_list)}\nNumber of whole features that are inconclusive: {full_na_genes}\nNumber of features with at least one domain that is essential: {len(essentials)}\nNumber of whole features that are essential: {len(significant_genes_list)}\n"""
     text_out = variables.directory + "/Essentiality_stats.log"
     with open(text_out, "w+") as text_file:
         text_file.write(stats_file)
 
-    x, y = zip(*euclidean_points[0])
-    fig, ax1 = plt.subplots()
-    plt.xlim(0, 1)
-    plt.ylim(0, 1)
-    ax1.set_xlabel("True Negative Rate")  # 1 - specificity
-    ax1.set_ylabel("True Positive Rate")  # (sensitivity)
-    ax1.plot(x, y, color="midnightblue")
-    ax1.plot(ax1.get_xlim(), ax1.get_ylim(), ls="--", c=".3")
-    ax1.tick_params(axis='y')
-    ax1.set_title("Reciver Operator Curve (ROC)\nused to auto-determine the essentiality calling threshold for %s" %
-                  variables.strain, size=9, pad=13)
-    ax1.legend([legenda], loc="lower right")
-    fig.tight_layout()
-    plt.savefig(
-        f"{variables.directory}/ROC_curves_{variables.strain}.png", dpi=300)
-    plt.close()
     gene_essentiality_compressor(optimal_basket)
 
 
-def genome_loader(startup=True):
+def genome_loader():
     ''' This function loads the genome sequence and stores it in a dictionary 
     named `genome_seq` under their respective contigs. It also initializes 
     empty dictionaries named `borders_contig`, `orientation_contig`, and 
@@ -1194,29 +1127,73 @@ def genome_loader(startup=True):
                 if ">" in line:
                     contig = line.split()[0][1:]
                     variables.genome_seq[contig] = ""
-                    variables.borders_contig[contig] = {}
-                    variables.orientation_contig[contig] = {}
-                    variables.insertions_contig[contig] = {}
                 else:
                     variables.genome_seq[contig] += line[:-1]
 
         for contig in variables.genome_seq:
-            if startup:
-                colourful_errors("INFO",
-                    f"Loaded contig {contig}")
+            colourful_errors("INFO",f"Loaded contig {contig}")
             variables.genome_length += len(variables.genome_seq[contig])
 
     elif variables.annotation_type == "gb":
         for rec in SeqIO.parse(variables.annotation_file_paths[0], "gb"):
             variables.genome_length = len(rec.seq)
             variables.annotation_contig = rec.id
-            variables.borders_contig[variables.annotation_contig] = {}
-            variables.orientation_contig[variables.annotation_contig] = {}
-            variables.insertions_contig[variables.annotation_contig] = {}
-            if startup:
-                colourful_errors("INFO",
+            colourful_errors("INFO",
                     f"Loaded contig {variables.annotation_contig}")
             variables.genome_seq[variables.annotation_contig] = str(rec.seq)
+    
+    variables.transposon_motiv_count = {}
+    variables.chance_motif_tn = {}
+    
+    for contig in variables.genome_seq:
+        contig_size = len(variables.genome_seq[contig])
+        variables.insertions_contig[contig] = np.zeros(contig_size, dtype=np.int16)
+        variables.borders_contig[contig] = np.zeros(contig_size, dtype='<U2')
+        variables.orientation_contig_plus[contig] = np.zeros(contig_size, dtype=np.int16)
+        variables.orientation_contig_neg[contig] = np.zeros(contig_size, dtype=np.int16)
+        variables.transposon_motiv_count[contig] = {}
+        variables.chance_motif_tn[contig] = {}
+
+def genome_probability_2feature_range(basket, genome_sub_divider):
+    for id_gene in basket:
+        feature = basket[id_gene]
+        half_way = int((feature.end - feature.start) / 2) + feature.start
+        genome_normalization_range_down = half_way - genome_sub_divider
+        genome_normalization_range_up = half_way + genome_sub_divider
+        genome_normalization_range_up_circle = None
+
+        if len(variables.genome_seq) == 1:
+            if genome_normalization_range_down < 0:
+                offset = abs(genome_normalization_range_down)
+                genome_normalization_range_down = 0
+                genome_normalization_range_down_circle = len(variables.genome_seq[feature.contig]) - offset
+                genome_normalization_range_up_circle = len(variables.genome_seq[feature.contig])
+                
+            if genome_normalization_range_up > len(variables.genome_seq[feature.contig]):
+                genome_normalization_range_up_circle = genome_normalization_range_up - len(variables.genome_seq[feature.contig])
+                genome_normalization_range_up = len(variables.genome_seq[feature.contig])
+                genome_normalization_range_down_circle = 0
+                
+        else:
+            if genome_normalization_range_down < 0:
+                genome_normalization_range_down = 0
+            if genome_normalization_range_up > len(variables.genome_seq[feature.contig]):
+                genome_normalization_range_up = len(variables.genome_seq[feature.contig])
+            
+        stacked_probability,counter = 0,0
+        for key in variables.chance_motif_tn[feature.contig]:
+
+            if (key >= genome_normalization_range_down ) & (key <= genome_normalization_range_up):
+                counter+=1
+                stacked_probability += variables.chance_motif_tn[feature.contig][key]
+                
+            if genome_normalization_range_up_circle is not None:
+                if (key >= genome_normalization_range_down_circle ) & (key <= genome_normalization_range_up_circle):
+                    counter+=1
+                    stacked_probability += variables.chance_motif_tn[feature.contig][key]
+        
+        basket[id_gene].genome_normalization_range = stacked_probability/counter  
+    return basket
 
 def domain_iterator(basket):
     ''' The function domain_iterator performs an iterative process to find 
@@ -1271,14 +1248,19 @@ def domain_iterator(basket):
 
         return pvalue, best_distance, np.array(euclidean_points)
 
-    def iterating(i, iterator_store, euclidean_distances, basket, current_gap):
-        basket = domain_resizer(variables.domain_iteration[i], basket)
+    def iterating(current_gap, iterator_store, euclidean_distances, basket, current_param):
+        basket = domain_resizer(current_gap, basket)
         basket = multi_annotater(basket)
         best_pvalue, best_distance, euclidean_points = ROC(basket)
         iterator_store.append(
-            [current_gap] + [best_pvalue] + [best_distance] + [i] + [euclidean_points])
+            [current_param] + [best_pvalue] + [best_distance] + [euclidean_points])
         return iterator_store
-
+    
+    genome_iterator = variables.genome_length
+    if variables.biggest_gene*30 < variables.genome_length:
+        genome_iterator = variables.fibonacci(variables.biggest_gene*15, 1, int(variables.genome_length/2), [])[1:-1:2]
+        genome_iterator.append(int(variables.genome_length/2))
+        
     euclidean_distances = []
     iterator_store = []
     i, current_gap = 0, 0
@@ -1291,52 +1273,62 @@ def domain_iterator(basket):
                 iteration += 1
 
         while (current_gap <= variables.biggest_gene) and (i+1 < len(variables.domain_iteration)):
-            current_gap = int(variables.genome_length /
-                              variables.total_insertions * variables.domain_iteration[i])
-            colourful_errors("INFO",
-                f"Current domain division iteration: {i+1} out {iteration}")
-            iterator_store = iterating(
-                i, iterator_store, euclidean_distances, basket, current_gap)
-            i += 1
+            colourful_errors("INFO",f"Current domain division iteration: {i+1} out {iteration}")
+            current_gap = int(variables.genome_length / variables.total_insertions * variables.domain_iteration[i])
             
-        # sort by best eucledian distance
-        sorted_optimal = sorted(iterator_store, key=lambda e: e[2])
-        variables.best_domain_size = sorted_optimal[0][0]
-        
+            for genome_sub_divider in genome_iterator:
+                basket=genome_probability_2feature_range(basket,genome_sub_divider)        
+                current_param = f"{genome_sub_divider}:{current_gap}"
+                iterator_store = iterating(current_gap, iterator_store, euclidean_distances, basket, current_param) #add the optimal genome partirion size to the current gap
+            i += 1
+
     except Exception:
         colourful_errors("WARNING",
             "Low saturating library detected.")
-        variables.best_domain_size = sorted_optimal[0]
+
+    # sort by best eucledian distance
+    sorted_optimal = sorted(iterator_store, key=lambda e: e[2])
+    best = sorted_optimal[0][0].split(":")
+    optimal_pvalue = sorted_optimal[0][1]
+    variables.best_domain_size = int(best[1])
+    variables.best_genome_size = int(best[0])
     
     colourful_errors("INFO",
-        f"Optimal domain division size of {variables.best_domain_size}bp")
+        f"Optimal domain division size: {variables.best_domain_size}bp")
+    
+    colourful_errors("INFO",
+        f"Optimal genome normalization window size: {variables.best_genome_size*2}bp")
 
     fig, ax1 = plt.subplots()
 
     plt.xlim(0, 1)
     plt.ylim(0, 1)
-
+    
     ax1.set_xlabel("True Negative Rate")  # 1 - specificity
     ax1.set_ylabel("True Positive Rate")  # (sensitivity)
 
-    legenda = [n[0] for n in iterator_store]
-    for i in iterator_store:
-        z, x = zip(*i[4][0])
-        ax1.plot(z, x)
-
-    ax1.plot(ax1.get_xlim(), ax1.get_ylim(), ls="--", c=".3")
+    for i, entry in enumerate(sorted_optimal):
+        z, x = zip(*entry[3][0])
+        if i == 0:
+            special_line, = ax1.plot(z, x, zorder=10, linewidth=2.5)
+        else:
+            ax1.plot(z, x, c=".8", zorder=1, alpha=0.5)
+    
+    ax1.plot(ax1.get_xlim(), ax1.get_ylim(), ls="--", c=".3", zorder=0)
     ax1.tick_params(axis='y')
-    ax1.set_title("Reciver Operator Curve (ROC)\nused to auto-determine the essentiality calling threshold for %s" %
-                  variables.strain, size=9, pad=13)
-    ax1.legend(legenda, loc="lower right")
+    
+    ax1.set_title(f"Receiver Operator Curve (ROC)\nused to auto-determine the essentiality calling threshold for {variables.strain}",
+                  size=9, pad=13)
+    
+    # Legend only for the special line
+    legenda = f"Domain size: {variables.best_domain_size}bp\nGenome normalization window: {variables.best_genome_size*2}bp\nOptimal significance threshold: {optimal_pvalue}"
+    ax1.legend([special_line], [legenda], loc="lower right", fontsize=7)
+    
     fig.tight_layout()
-    plt.savefig(os.path.join(variables.directory,
-                "ROC_curves_iterator_%s.png" % variables.strain), dpi=300)
+    plt.savefig(os.path.join(variables.directory, f"ROC_curves_iterator_{variables.strain}.png"), dpi=300)
     plt.close()
-    best_index = int(sorted_optimal[0][3])
-    #output_writer(variables.directory, "Best_ROC_points{}".format(variables.output_name), iterator_store[best_index][4][0])
 
-    return best_index, iterator_store[best_index][1], iterator_store[best_index][4]
+    return optimal_pvalue
 
 def gene_essentiality_compressor(basket):
     
@@ -1344,9 +1336,9 @@ def gene_essentiality_compressor(basket):
                              low_memory=False)
 
     classifier = {'Essential': 1,
-                  'Likelly Essential': 2,
+                  'Likely Essential': 2,
                   'Probably Essential': 3,
-                  'too small for assaying': 4,
+                  'Inconclusive': 4,
                   'Non-Essential': 5}
 
     binned_essentiality = {}
@@ -1415,27 +1407,24 @@ def main(argv):
     input (argv), sets up the necessary inputs and paths, loads the genome 
     sequence data, parses the transposon insertion data, constructs a basket 
     of genes, generates a matrix of gene insertions, iterates over different 
-    domain sizes and identifies the optimal one, compiles the final results, 
-    and prints the start and end times of the program execution. '''
+    domain sizes and identifies the optimal one, compiles the final results. '''
     
     inputs(argv)
     path_finder()
-    genome_loader(startup=True)
-    insertions_parser(startup=True)
+    genome_loader()
+    insertions_parser()
     evaluator_basket = blast_maker()
     if (len(variables.true_positives) != 0) or (len(variables.true_negatives) != 0):
         evaluator_basket = gene_insertion_matrix(evaluator_basket)
-        best_index, pvalue, euclidean_points = domain_iterator(evaluator_basket)
+        pvalue = domain_iterator(evaluator_basket)
     else:
-        best_index, pvalue, euclidean_points = 0,variables.pvalue,[[[0,0],[0,0]]]
+        pvalue = variables.pvalue
 
-    genome_loader(startup=False) # create a cleaner version where this doesnt need to repeat
-    insertions_parser(startup=False)
-    basket = basket_storage()
-    basket = gene_insertion_matrix(basket)
-    best_basket = domain_resizer(variables.domain_iteration[best_index], basket)
-    best_basket = multi_annotater(best_basket)
-    final_compiler(best_basket, pvalue, euclidean_points)
+    basket = gene_insertion_matrix(basket_storage())
+    basket = domain_resizer(variables.best_domain_size, basket)
+    basket = genome_probability_2feature_range(basket, variables.best_genome_size)
+    basket = multi_annotater(basket)
+    final_compiler(basket, pvalue)
 
 if __name__ == "__main__":
     main(sys.argv[0])

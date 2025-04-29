@@ -227,11 +227,11 @@ def input_parser():
     parser.add_argument("--ph", nargs="?", const=1, default=1, help="Phred Score (removes reads where nucleotides have lower phred scores)")
     parser.add_argument("--mq",nargs='?',const=1,default=1, help="Bowtie2 MAPQ threshold")
     parser.add_argument("--ig",nargs='?',const=0,default=0, help="The number of bp up and down stream of any gene to be considered an intergenic region")
-    parser.add_argument("--dut",nargs='?',const=0.75,default=0.75, help="fraction of the minimal amount of 'too small domains' in a gene before the entire gene is deemed uncertain for essentiality inference")
+    parser.add_argument("--dut",nargs='?',const=0.75,default=0.75, help="Fraction of the minimal amount of 'inconclusive domains' in a gene before the entire gene is deemed too uncertain for essentiality inference")
     parser.add_argument("--pv",nargs='?',const=0.05,default=0.05,help="Essential Finder pvalue threshold for essentiality determination")
     parser.add_argument("--sl5",nargs='?',const=0,default=0,help="5' gene trimming percent for essentiality determination (number between 0 and 1)")
     parser.add_argument("--sl3",nargs='?',const=1,default=1,help="3' gene trimming percent for essentiality determination (number between 0 and 1)")
-    parser.add_argument("--tst",nargs='?',const=True,help="Test the program functionalities and instalations")
+    parser.add_argument("--tst",nargs='?',const=True,help="Test the program functionalities and dependencies")
     parser.add_argument("--cpu",nargs='?',const=None,help="Define the number of threads (must be and integer)")
 
     args = parser.parse_args()
@@ -245,7 +245,7 @@ def input_parser():
     print(f"{Fore.RED}    ██║   ██║ ╚████║ {Fore.RESET}███████║███████╗███████╗██║  ██╗███████╗██║  ██║")
     print(f"{Fore.RED}    ╚═╝   ╚═╝  ╚═══╝ {Fore.RESET}╚══════╝╚══════╝╚══════╝╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝")   
     
-    variables["version"]="1.1.0.9"
+    variables["version"]="1.2"
     
     print(f"{Fore.RED}            Version: {Fore.RESET}{variables['version']}")
     print("\n")  
