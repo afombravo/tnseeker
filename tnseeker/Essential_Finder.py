@@ -6,7 +6,7 @@ import numpy as np
 import scipy
 import re
 from tnseeker.extras.possion_binom import PoiBin
-from tnseeker.extras.helper_functions import colourful_errors,csv_writer,subprocess_cmd,file_finder,variables_parser,gb_parser,gff_parser,inter_gene_annotater
+from tnseeker.extras.helper_functions import colourful_errors,csv_writer,subprocess_cmd,file_finder,variables_parser,gb_parser,gff_parser,inter_gene_annotater,adjust_spines
 from scipy.stats import binomtest
 import multiprocessing
 import matplotlib.pyplot as plt
@@ -1400,6 +1400,58 @@ def gene_essentiality_compressor(basket):
                           [essentials[essentials["Gene ID"]==gene]["Full gene essentiality"].iloc[0]])
     
     output_writer(variables.directory, f"{variables.output_name}_final", final_out)
+    essential_plot()
+
+def essential_plot():
+    essentials = pd.read_csv(f"{variables.directory}/{variables.output_name}_final.csv")
+    
+    data = {
+        'Essentiality': [],
+        'Category': [],
+        'Count': []
+    }
+
+    grouped = essentials.groupby("Essentiality")
+    for essential_category, sub_df in grouped:
+        ir_group = sub_df[sub_df['Gene Name'].str.contains('IR_')]
+        non_ir_group = sub_df[~sub_df['Gene Name'].str.contains('IR_')]
+        
+        data['Essentiality'].append(essential_category)
+        data['Category'].append('Intergenic')
+        data['Count'].append(len(ir_group))
+
+        data['Essentiality'].append(essential_category)
+        data['Category'].append('Gene')
+        data['Count'].append(len(non_ir_group))
+
+    plot_df = pd.DataFrame(data)
+    plot_df['Percent'] = plot_df.groupby('Essentiality')['Count'].transform(lambda x: x / x.sum() * 100)
+
+    percent_df = plot_df.pivot(index='Essentiality', columns='Category', values='Percent')
+    count_df = plot_df.pivot(index='Essentiality', columns='Category', values='Count')
+
+    ax = percent_df.plot(kind='bar', stacked=True, figsize=(10,6))
+
+    for idx, essential_category in enumerate(percent_df.index):
+        for cat in percent_df.columns:
+            percent = percent_df.loc[essential_category, cat]
+            count = int(count_df.loc[essential_category, cat])
+            if percent > 0:
+                ax.annotate(f'{count}',
+                            xy=(idx, percent_df.loc[essential_category, :].cumsum()[cat] - percent / 2),
+                            ha='center', va='center', color='black', fontsize=12, fontweight='bold')
+
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.spines['bottom'].set_visible(True)
+    ax.spines['left'].set_visible(True)
+    plt.ylabel("Percentage")
+    plt.xlabel("Essentiality category")
+    plt.title("Relative proportion of intergenic vs gene features by essentiality category")
+    plt.legend(title="Type")
+    plt.tight_layout()
+    adjust_spines(ax, ['left', 'bottom'], (-0.5, ax.get_xlim()[1]), (0,ax.get_ylim()[1]))
+    plt.savefig(f"{variables.directory}/{variables.output_name}_category_distribution.png", dpi=300)
 
 def main(argv):
     ''' This function is the main function that calls all the other 
