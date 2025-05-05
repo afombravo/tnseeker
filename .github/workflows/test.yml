@@ -37,6 +37,9 @@ jobs:
     - name: Build the Python package
       run: python -m build
 
+    - name: Publish to PyPI
+      run: twine upload dist/*
+
     - name: Log in to Docker Hub
       run: echo "${DOCKER_PASSWORD}" | docker login -u "${DOCKER_USERNAME}" --password-stdin
 
