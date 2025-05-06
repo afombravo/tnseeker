@@ -113,11 +113,6 @@ def barcodes_per_gene(dict_df):
     plt.show()
     
 def plotter(genome_seq):
-    import matplotlib.pyplot as plt
-    import numpy as np
-    import pandas as pd
-    import seaborn as sns
-    from matplotlib.lines import Line2D
 
     entry = []
     with open(f'{variables["directory"]}/all_insertions_{variables["strain"]}.csv') as current:
@@ -150,7 +145,7 @@ def plotter(genome_seq):
 
     max_y_value = 0
     bin_size = 25_000
-    window = 5 
+    window = 3
 
     for i, (contig, contig_length) in enumerate(genome_seq.items()):
         if contig in set(df['contig']):
@@ -216,7 +211,14 @@ def plotter(genome_seq):
         Line2D([0], [0], color=cmap(0.82), label='- strand reads'),
         Line2D([0], [0], color=cmap(0.91), label='- strand insertions')
     ]
-    ax.legend(handles=legend_elements, loc='upper left', fontsize=8)
+    ax.legend(
+    handles=legend_elements,
+    loc='upper center',
+    bbox_to_anchor=(0.5, -0.15),
+    ncol=2,
+    fontsize=8,
+    frameon=False  # Optional: no legend box
+    )
 
     ax.set_ylim(1, max_y_value * 1.1)
     ax.set_xlim(0, incremental_position)

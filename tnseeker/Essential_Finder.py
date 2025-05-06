@@ -990,10 +990,11 @@ def multi_pvalue_iter(basket):
 
     # change here to increase resolution of iteration
     #pvalue = [variables.pvalue * 0.5 ** i for i in range(200)]
+    fibo = variables.fibonacci(variables.pvalue, 1, 3, [])[1:]
+    ratio = fibo[0]/fibo[1]/2 #half the inverse fibo ratio
+    pvalue = [variables.pvalue * ratio ** i for i in range(50)]
     
-    pvalue = [variables.pvalue * 0.25 ** i for i in range(50)]
     result_objs, pvalue_listing, euclidean_points = [], [], []
-
     pvaluing_array, names, pvalues_list = class_to_numba(basket)
 
     pool = multiprocessing.Pool(processes = variables.cpus)
