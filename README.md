@@ -157,7 +157,7 @@ tnseeker requires several input files:
  
  2. An annotation file in genbank format (.gb), or a .gff (there is an example gff format file in this repo)
  
- 3. A FASTA file with the genome under analysis.
+ 3. A FASTA file with the genome under analysis. The contig names MUST match the ones in the annotation files (Version name in the .gb file, or the first column in the gff file)
 
 ---
 
